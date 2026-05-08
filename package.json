@@ -1,40 +1,130 @@
 {
   "name": "opencode-sidebar-web",
-  "displayName": "Opencode Sidebar Web",
-  "description": "La extensión Opencode Sidebar Web para VS Code integra directamente la interfaz web de OpenCode en un panel lateral dentro del editor.  Al activarse, inicia automáticamente el servidor local de OpenCode (generalmente en localhost:4096) y carga su interfaz completa mediante un webview, permitiendo chatear, crear nuevas sesiones y gestionar el entorno sin salir de VS Code.",
+  "displayName": "OpenCode Sidebar Web",
+  "description": "Integra la interfaz web de OpenCode en un panel lateral derecho de VS Code.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.118.0"
   },
+  "icon": "media/icon.png",
   "categories": [
-    "Other"
+    "Other",
+    "Chat"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:opencode-sidebar-web.openPanel",
+    "onCommand:opencode-sidebar-web.startServer"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "opencode-sidebar-web.helloWorld",
-        "title": "Hello World"
+        "command": "opencode-sidebar-web.openPanel",
+        "title": "OpenCode: Abrir panel",
+        "icon": {
+          "light": "media/icon.svg",
+          "dark": "media/icon.svg"
+        }
+      },
+      {
+        "command": "opencode-sidebar-web.closePanel",
+        "title": "OpenCode: Cerrar panel",
+        "icon": {
+          "light": "media/icon-close.svg",
+          "dark": "media/icon-close.svg"
+        }
+      },
+      {
+        "command": "opencode-sidebar-web.startServer",
+        "title": "OpenCode: Iniciar servidor"
+      },
+      {
+        "command": "opencode-sidebar-web.stopServer",
+        "title": "OpenCode: Detener servidor"
+      },
+      {
+        "command": "opencode-sidebar-web.restartServer",
+        "title": "OpenCode: Reiniciar servidor"
+      },
+      {
+        "command": "opencode-sidebar-web.openFile",
+        "title": "OpenCode: Abrir archivo"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "opencode-sidebar-web.openPanel",
+          "group": "navigation",
+          "when": "!config.opencode-sidebar-web.hideButton && !opencodeSidebarPanelVisible"
+        },
+        {
+          "command": "opencode-sidebar-web.closePanel",
+          "group": "navigation",
+          "when": "!config.opencode-sidebar-web.hideButton && opencodeSidebarPanelVisible"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "opencode-sidebar-web.openPanel",
+        "key": "ctrl+shift+o",
+        "mac": "cmd+shift+o"
+      }
+    ],
+    "configuration": {
+      "title": "OpenCode Sidebar Web",
+      "properties": {
+        "opencode-sidebar-web.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Iniciar automáticamente el servidor OpenCode al abrir VS Code"
+        },
+        "opencode-sidebar-web.hostname": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Hostname para el servidor OpenCode"
+        },
+        "opencode-sidebar-web.hideButton": {
+          "type": "boolean",
+          "default": false,
+          "description": "Ocultar el botón de OpenCode en la barra del editor"
+        },
+        "opencode-sidebar-web.autoReconnect": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reintentar conexión automáticamente cuando el servidor se cae"
+        },
+        "opencode-sidebar-web.maxReconnectAttempts": {
+          "type": "number",
+          "default": 3,
+          "description": "Número máximo de intentos de reconexión"
+        }
+      }
+    }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run esbuild",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
+    "esbuild": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --minify --sourcemap",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.118.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.56.1",
+    "@types/vscode": "^1.118.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.1",
+    "esbuild": "^0.28.0",
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "opencode-ai": "^1.14.41"
   }
 }

@@ -1,71 +1,41 @@
-# opencode-sidebar-web README
+# OpenCode Sidebar Web
 
-This is the README for your extension "opencode-sidebar-web". After writing up a brief description, we recommend including the following sections.
+Integrates the OpenCode web UI into a VS Code sidebar panel.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- Opens OpenCode web interface in a right-side panel (`ViewColumn.Beside`)
+- Starts the OpenCode server on-demand or automatically
+- Editor title button to toggle the panel open/close (changes icon when panel is open)
+- Status bar indicator showing connection state
+- Auto-reconnect when the server disconnects
+- Theme sync: OpenCode follows VS Code's light/dark theme
+- Proxy with CSP header stripping for secure iframe embedding
+- "View Logs" and "Settings" links in the panel
 
-For example if there is an image subfolder under your extension project workspace:
+## Usage
 
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Click the OpenCode icon in the editor title bar
+- Or press `Ctrl+Shift+O` (`Cmd+Shift+O` on macOS)
+- Click "Start Server" in the panel to start the OpenCode server
+- The OpenCode web UI will load inside the panel
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+- `opencode-sidebar-web.autoStart`: Automatically start the OpenCode server when VS Code opens
+- `opencode-sidebar-web.autoReconnect`: Automatically reconnect when the server disconnects
+- `opencode-sidebar-web.maxReconnectAttempts`: Maximum number of reconnection attempts (default: 3)
+- `opencode-sidebar-web.hostname`: Hostname for the OpenCode server (default: 127.0.0.1)
+- `opencode-sidebar-web.hideButton`: Hide the OpenCode button from the editor title bar
+
+## Requirements
+
+- VS Code 1.118.0 or higher
+- The `opencode-ai` npm package (bundled)
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- Server startup requires a working OpenCode binary (automatically detected from node_modules)
+- The iframe uses a local proxy to remove CSP headers for embedding

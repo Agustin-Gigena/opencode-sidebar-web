@@ -1,26 +1,124 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { OpenCodeServer } from './OpenCodeServer';
+import { OpenCodePanel } from './OpenCodePanel';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
+let server: OpenCodeServer | undefined;
+let panel: OpenCodePanel | undefined;
+let serverWasEverRunning = false;
+
 export function activate(context: vscode.ExtensionContext) {
+  server = new OpenCodeServer(context);
+  panel = new OpenCodePanel(context.extensionUri, server, startServer);
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "opencode-sidebar-web" is now active!');
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.openPanel', async () => {
+      if (panel!.isVisible) {
+        panel!.close();
+        return;
+      }
+      await panel!.show();
+      if (!server!.isRunning) {
+        await startServer();
+      }
+    })
+  );
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('opencode-sidebar-web.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from Opencode Sidebar Web!');
-	});
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.focusPanel', async () => {
+      await panel!.show();
+    })
+  );
 
-	context.subscriptions.push(disposable);
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.closePanel', () => {
+      panel!.close();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.startServer', startServer)
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.stopServer', async () => {
+      reconnectCanceled = true;
+      panel?.clearState();
+      await server?.stop();
+      panel?.render();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.restartServer', async () => {
+      panel?.clearState();
+      await server?.restart();
+      panel?.render();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.openFile', async (uri: vscode.Uri | string) => {
+      const fileUri = typeof uri === 'string' ? vscode.Uri.parse(uri) : uri;
+      await vscode.commands.executeCommand('vscode.open', fileUri);
+    })
+  );
+
+  server.onDidChangeStatus((running) => {
+    if (running) {
+      serverWasEverRunning = true;
+      panel?.clearState();
+      panel?.render();
+    } else if (serverWasEverRunning) {
+      panel?.markCrashed();
+      attemptReconnect();
+    }
+  });
+
+  const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+  if (config.get('autoStart', false)) {
+    server.start()
+      .then(() => panel?.render())
+      .catch((err) => console.error('Auto-start failed:', err));
+  }
 }
 
-// This method is called when your extension is deactivated
-export function deactivate() {}
+async function startServer(): Promise<void> {
+  if (!server || server.isRunning) { return; }
+  reconnectCanceled = true;
+
+  try {
+    await server.start();
+    panel?.render();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    panel?.setError(msg);
+    vscode.window.showErrorMessage(
+      `Failed to start OpenCode server: ${msg}`
+    );
+  }
+}
+
+let reconnectCanceled = false;
+
+async function attemptReconnect(): Promise<void> {
+  const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+  if (!config.get('autoReconnect', true)) { return; }
+
+  const maxAttempts = config.get('maxReconnectAttempts', 3);
+  for (let i = 0; i < maxAttempts; i++) {
+    const delay = Math.pow(2, i) * 1000;
+    await new Promise((r) => setTimeout(r, delay));
+    if (reconnectCanceled || !server || server.isRunning || !panel?.isVisible) { return; }
+    try {
+      await server.start();
+      return;
+    } catch { /* next attempt */ }
+  }
+}
+
+export async function deactivate(): Promise<void> {
+  reconnectCanceled = true;
+  await server?.dispose();
+  panel = undefined;
+  server = undefined;
+}
