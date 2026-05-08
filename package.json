@@ -12,6 +12,7 @@
     "Chat"
   ],
   "activationEvents": [
+    "onStartupFinished",
     "onCommand:opencode-sidebar-web.openPanel",
     "onCommand:opencode-sidebar-web.startServer"
   ],
