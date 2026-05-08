@@ -34,8 +34,3 @@ This extension contributes the following settings:
 
 - VS Code 1.118.0 or higher
 - The `opencode-ai` npm package (bundled)
-
-## Known Issues
-
-- Server startup requires a working OpenCode binary (automatically detected from node_modules)
-- The iframe uses a local proxy to remove CSP headers for embedding
