@@ -3,6 +3,11 @@
   "displayName": "OpenCode Sidebar Web",
   "description": "Integra la interfaz web de OpenCode en un panel lateral derecho de VS Code.",
   "version": "0.0.1",
+  "publisher": "agustin-gigena",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agustin-gigena/opencode-sidebar-web"
+  },
   "engines": {
     "vscode": "^1.118.0"
   },
@@ -125,7 +130,5 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
   },
-  "dependencies": {
-    "opencode-ai": "^1.14.41"
-  }
+  "dependencies": {}
 }

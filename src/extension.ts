@@ -6,9 +6,22 @@ let server: OpenCodeServer | undefined;
 let panel: OpenCodePanel | undefined;
 let serverWasEverRunning = false;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   server = new OpenCodeServer(context);
   panel = new OpenCodePanel(context.extensionUri, server, startServer);
+
+  if (!server.isBinaryInstalled()) {
+    const install = await vscode.window.showInformationMessage(
+      'OpenCode binary not found. Install it now?',
+      'Install'
+    );
+    if (install === 'Install') {
+      await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Installing OpenCode...' },
+        async () => { await server!.installBinary(); }
+      );
+    }
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand('opencode-sidebar-web.openPanel', async () => {

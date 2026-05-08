@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, exec } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -12,6 +12,7 @@ const CSP_HEADERS = [
 ];
 
 const PORT_REGEX = /listening on https?:\/\/[^:]+:(\d+)/i;
+const OPENCODE_PACKAGE = 'opencode-ai';
 
 export class OpenCodeServer {
   private process: ChildProcess | null = null;
@@ -28,8 +29,10 @@ export class OpenCodeServer {
   private _statusBarItem: vscode.StatusBarItem;
   private _onDidChangeStatus = new vscode.EventEmitter<boolean>();
   readonly onDidChangeStatus = this._onDidChangeStatus.event;
+  private _extensionPath: string;
 
   constructor(context: vscode.ExtensionContext) {
+    this._extensionPath = context.extensionPath;
     this._outputChannel = vscode.window.createOutputChannel('OpenCode Server');
 
     this._statusBarItem = vscode.window.createStatusBarItem(
@@ -38,6 +41,63 @@ export class OpenCodeServer {
     this._statusBarItem.command = 'opencode-sidebar-web.focusPanel';
     context.subscriptions.push(this._statusBarItem, this._outputChannel);
     this.updateStatusBar();
+  }
+
+  isBinaryInstalled(): boolean {
+    return this.findBinaryPath() !== undefined;
+  }
+
+  async installBinary(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const child = exec(
+        `npm install ${OPENCODE_PACKAGE}@latest --no-audit --no-fund`,
+        { cwd: this._extensionPath, timeout: 120000 },
+        (error, stdout, stderr) => {
+          this._outputChannel.appendLine(stdout);
+          if (stderr) { this._outputChannel.appendLine(stderr); }
+          if (error) {
+            reject(new Error(`npm install failed: ${error.message}`));
+          } else {
+            resolve();
+          }
+        }
+      );
+    });
+  }
+
+  private findBinaryPath(): string | undefined {
+    const nodeModules = path.join(this._extensionPath, 'node_modules');
+    const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
+
+    // 1. Hidden ELF binary inside opencode-ai
+    const hidden = path.join(nodeModules, 'opencode-ai', 'bin', '.opencode');
+    try { fs.accessSync(hidden, fs.constants.X_OK); return hidden; } catch { /* next */ }
+
+    // 2. Platform-specific packages (for manually installed)
+    const plat = platform() === 'win32' ? 'windows' : platform() === 'darwin' ? 'darwin' : 'linux';
+    const archName = arch();
+    const candidates = [
+      path.join(nodeModules, `opencode-${plat}-${archName}`, 'bin', binaryName),
+      path.join(nodeModules, `opencode-${plat}-${archName}-baseline`, 'bin', binaryName),
+      path.join(nodeModules, `opencode-${plat}-${archName}-musl`, 'bin', binaryName),
+      path.join(nodeModules, `opencode-${plat}-${archName}-baseline-musl`, 'bin', binaryName),
+    ];
+
+    for (const c of candidates) {
+      try { fs.accessSync(c, fs.constants.X_OK); return c; } catch { /* next */ }
+    }
+
+    // 3. Wrapper script (npm .bin symlink)
+    const wrapper = path.join(nodeModules, '.bin', 'opencode');
+    if (fs.existsSync(wrapper)) { return wrapper; }
+    const winWrapper = wrapper + '.cmd';
+    if (fs.existsSync(winWrapper)) { return winWrapper; }
+
+    // 4. opencode-ai wrapper script
+    const aiWrapper = path.join(nodeModules, 'opencode-ai', 'bin', 'opencode');
+    if (fs.existsSync(aiWrapper)) { return aiWrapper; }
+
+    return undefined;
   }
 
   get port(): number { return this._port; }
@@ -50,32 +110,6 @@ export class OpenCodeServer {
   get lastExitCode(): number | null { return this._processExitCode; }
   get outputChannel(): vscode.OutputChannel { return this._outputChannel; }
 
-  private findBinary(): string {
-    const nodeModules = path.join(__dirname, '..', 'node_modules');
-
-    const plat = platform() === 'win32' ? 'windows' : platform() === 'darwin' ? 'darwin' : 'linux';
-    const archName = arch();
-    const binaryName = plat === 'windows' ? 'opencode.exe' : 'opencode';
-
-    const candidates = [
-      path.join(nodeModules, `opencode-${plat}-${archName}`, 'bin', binaryName),
-      path.join(nodeModules, `opencode-${plat}-${archName}-baseline`, 'bin', binaryName),
-      path.join(nodeModules, `opencode-${plat}-${archName}-musl`, 'bin', binaryName),
-      path.join(nodeModules, `opencode-${plat}-${archName}-baseline-musl`, 'bin', binaryName),
-    ];
-
-    for (const c of candidates) {
-      try { fs.accessSync(c, fs.constants.X_OK); return c; } catch { /* try next */ }
-    }
-
-    const wrapper = path.join(nodeModules, '.bin', 'opencode');
-    if (fs.existsSync(wrapper)) { return wrapper; }
-    const winWrapper = wrapper + '.cmd';
-    if (fs.existsSync(winWrapper)) { return winWrapper; }
-
-    return 'opencode';
-  }
-
   async start(): Promise<void> {
     if (this._isRunning) { return; }
 
@@ -87,7 +121,13 @@ export class OpenCodeServer {
     this._hostname = vscode.workspace.getConfiguration('opencode-sidebar-web')
       .get('hostname', '127.0.0.1');
 
-    const binary = this.findBinary();
+    const binary = this.findBinaryPath();
+    if (!binary) {
+      throw new Error(
+        `OpenCode binary not found. Run "npm install ${OPENCODE_PACKAGE}" in the extension directory, or use the "Install OpenCode" command.`
+      );
+    }
+
     this._outputChannel.appendLine(`Starting OpenCode server...`);
     this._outputChannel.appendLine(`Binary: ${binary}`);
 
