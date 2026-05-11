@@ -63,6 +63,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('opencode-sidebar-web.restartServer', async () => {
+      reconnectCanceled = true;
       panel?.clearState();
       await server?.restart();
       panel?.render();
@@ -78,6 +79,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   server.onDidChangeStatus((running) => {
     if (running) {
+      reconnectCanceled = false;
       serverWasEverRunning = true;
       panel?.clearState();
       panel?.render();

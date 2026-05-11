@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChildProcess, spawn, exec } from 'child_process';
+import { ChildProcess, spawn, exec, execSync } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -49,7 +49,7 @@ export class OpenCodeServer {
 
   async installBinary(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const child = exec(
+      exec(
         `npm install ${OPENCODE_PACKAGE}@latest --no-audit --no-fund`,
         { cwd: this._extensionPath, timeout: 120000 },
         (error, stdout, stderr) => {
@@ -66,35 +66,46 @@ export class OpenCodeServer {
   }
 
   private findBinaryPath(): string | undefined {
-    const nodeModules = path.join(this._extensionPath, 'node_modules');
     const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
 
-    // 1. Hidden ELF binary inside opencode-ai
-    const hidden = path.join(nodeModules, 'opencode-ai', 'bin', '.opencode');
+    // 1. Check if opencode is in system PATH
+    try {
+      const which = execSync(
+        platform() === 'win32' ? `where ${binaryName}` : `which ${binaryName}`,
+        { encoding: 'utf8', timeout: 3000 }
+      );
+      const found = which.split('\n')[0].trim();
+      if (found) { return found; }
+    } catch { /* not in PATH */ }
+
+    const extModules = path.join(this._extensionPath, 'node_modules');
+
+    // 2. Hidden ELF binary inside opencode-ai (npm install local)
+    const hidden = path.join(extModules, 'opencode-ai', 'bin', '.opencode');
     try { fs.accessSync(hidden, fs.constants.X_OK); return hidden; } catch { /* next */ }
 
-    // 2. Platform-specific packages (for manually installed)
+    // 3. Platform-specific packages
     const plat = platform() === 'win32' ? 'windows' : platform() === 'darwin' ? 'darwin' : 'linux';
     const archName = arch();
     const candidates = [
-      path.join(nodeModules, `opencode-${plat}-${archName}`, 'bin', binaryName),
-      path.join(nodeModules, `opencode-${plat}-${archName}-baseline`, 'bin', binaryName),
-      path.join(nodeModules, `opencode-${plat}-${archName}-musl`, 'bin', binaryName),
-      path.join(nodeModules, `opencode-${plat}-${archName}-baseline-musl`, 'bin', binaryName),
+      path.join(extModules, `opencode-${plat}-${archName}`, 'bin', binaryName),
+      path.join(extModules, `opencode-${plat}-${archName}-baseline`, 'bin', binaryName),
+      path.join(extModules, `opencode-${plat}-${archName}-musl`, 'bin', binaryName),
+      path.join(extModules, `opencode-${plat}-${archName}-baseline-musl`, 'bin', binaryName),
     ];
 
     for (const c of candidates) {
       try { fs.accessSync(c, fs.constants.X_OK); return c; } catch { /* next */ }
     }
 
-    // 3. Wrapper script (npm .bin symlink)
-    const wrapper = path.join(nodeModules, '.bin', 'opencode');
+    // 4. npm .bin symlink
+    const wrapper = path.join(extModules, '.bin', 'opencode');
     if (fs.existsSync(wrapper)) { return wrapper; }
     const winWrapper = wrapper + '.cmd';
     if (fs.existsSync(winWrapper)) { return winWrapper; }
 
-    // 4. opencode-ai wrapper script
-    const aiWrapper = path.join(nodeModules, 'opencode-ai', 'bin', 'opencode');
+    // 5. opencode-ai wrapper script
+    const aiWrapper = path.join(extModules, 'opencode-ai', 'bin', 'opencode');
     if (fs.existsSync(aiWrapper)) { return aiWrapper; }
 
     return undefined;
@@ -177,6 +188,9 @@ export class OpenCodeServer {
   private handleOutput(text: string): void {
     this._outputChannel.append(text);
     this._outputBuffer += text;
+    if (this._outputBuffer.length > 10000) {
+      this._outputBuffer = this._outputBuffer.slice(-5000);
+    }
 
     if (this._port === 0) {
       const match = this._outputBuffer.match(PORT_REGEX);

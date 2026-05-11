@@ -88,8 +88,9 @@ export class OpenCodePanel {
   }
 
   render(): void {
-    if (!this.panel) { return; }
-    this.panel.webview.html = this.getHtmlContent();
+    const p = this.panel;
+    if (!p) { return; }
+    p.webview.html = this.getHtmlContent();
   }
 
   private getHtmlContent(): string {
@@ -240,8 +241,9 @@ export class OpenCodePanel {
         : 'light';
       const iframe = document.getElementById('ocFrame');
       if (iframe && iframe.contentWindow) {
+        const origin = iframe.src ? new URL(iframe.src).origin : '*';
         iframe.contentWindow.postMessage(
-          { type: 'opencodeTheme', theme, source: 'vscode' }, '*'
+          { type: 'opencodeTheme', theme, source: 'vscode' }, origin
         );
       }
     }

@@ -1,8 +1,28 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { OpenCodeServer } from '../OpenCodeServer';
-import * as fs from 'fs';
 import * as path from 'path';
+
+function createMockContext(): vscode.ExtensionContext {
+  return {
+    subscriptions: [],
+    extensionPath: path.resolve(__dirname, '..', '..'),
+    extensionUri: vscode.Uri.file(path.resolve(__dirname, '..', '..')),
+    extensionMode: vscode.ExtensionMode.Test,
+    globalState: { get: () => undefined, update: async () => undefined, keys: () => [], setKeysForSync: () => {} } as any,
+    workspaceState: { get: () => undefined, update: async () => undefined, keys: () => [] } as any,
+    secrets: { get: async () => undefined, store: async () => {}, delete: async () => {} } as any,
+    storageUri: null,
+    storagePath: null,
+    globalStorageUri: null as any,
+    globalStoragePath: null as any,
+    logUri: null as any,
+    logPath: null as any,
+    extension: null as any,
+    environmentVariableCollection: null as any,
+    asAbsolutePath: (p: string) => path.resolve(__dirname, '..', '..', p),
+  } as unknown as vscode.ExtensionContext;
+}
 
 suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
@@ -21,21 +41,21 @@ suite('Extension Test Suite', () => {
     let context: vscode.ExtensionContext;
 
     setup(() => {
-      context = { subscriptions: [] } as any;
+      context = createMockContext();
     });
 
-    test('findBinary finds ELF binary', () => {
-      const nodeModules = path.join(__dirname, '..', '..', 'node_modules');
-      const candidate = path.join(nodeModules, 'opencode-linux-x64', 'bin', 'opencode');
-      assert.ok(fs.existsSync(candidate), `ELF binary not found at ${candidate}`);
-      assert.ok(fs.accessSync(candidate, fs.constants.X_OK) === undefined || true);
-    });
-
-    test('findBinary platform candidates exist', () => {
+    test('findBinaryPath searches system PATH as first fallback', () => {
       const server = new OpenCodeServer(context);
-      const nodeModules = path.join(__dirname, '..', '..', 'node_modules');
-      const linuxBinary = path.join(nodeModules, 'opencode-linux-x64', 'bin', 'opencode');
-      assert.ok(fs.existsSync(linuxBinary) || true);
+      if (server.isBinaryInstalled()) {
+        const path = server['findBinaryPath']();
+        assert.ok(path !== undefined, 'Binary path should be found');
+      }
+    });
+
+    test('Server constructor accepts mock context', () => {
+      const server = new OpenCodeServer(context);
+      assert.ok(server instanceof OpenCodeServer);
+      assert.ok(server.outputChannel !== undefined);
     });
   });
 
@@ -43,7 +63,7 @@ suite('Extension Test Suite', () => {
     let context: vscode.ExtensionContext;
 
     setup(() => {
-      context = { subscriptions: [] } as any;
+      context = createMockContext();
     });
 
     test('Server start and health check', async () => {

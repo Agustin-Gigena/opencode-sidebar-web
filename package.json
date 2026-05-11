@@ -55,6 +55,10 @@
       {
         "command": "opencode-sidebar-web.openFile",
         "title": "OpenCode: Abrir archivo"
+      },
+      {
+        "command": "opencode-sidebar-web.focusPanel",
+        "title": "OpenCode: Enfocar panel"
       }
     ],
     "menus": {
@@ -120,7 +124,7 @@
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
+    "@types/node": "^22.19.19",
     "@types/vscode": "^1.118.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
@@ -129,6 +133,5 @@
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
-  },
-  "dependencies": {}
+  }
 }
