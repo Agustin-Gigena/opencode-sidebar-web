@@ -34,3 +34,14 @@ jobs:
         with:
           name: opencode-sidebar-web-${{ inputs.version }}
           path: "*.vsix"
+
+      - name: Generate summary
+        run: |
+          echo "## Release `${{ inputs.version }}`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "El VSIX se generó correctamente." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Descarga" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact**: \`opencode-sidebar-web-${{ inputs.version }}.vsix\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Descargar desde**: [${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
