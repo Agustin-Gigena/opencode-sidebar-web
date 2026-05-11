@@ -23,6 +23,24 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "opencode-sidebar-web",
+          "title": "OpenCode",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "opencode-sidebar-web": [
+        {
+          "type": "webview",
+          "id": "opencode-sidebar-web.view",
+          "name": "OpenCode"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "opencode-sidebar-web.openPanel",
@@ -66,12 +84,24 @@
         {
           "command": "opencode-sidebar-web.openPanel",
           "group": "navigation",
-          "when": "!config.opencode-sidebar-web.hideButton && !opencodeSidebarPanelVisible"
+          "when": "!config.opencode-sidebar-web.hideButton"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "opencode-sidebar-web.startServer",
+          "when": "view == opencode-sidebar-web.view && !opencodeSidebarServerRunning",
+          "group": "navigation"
         },
         {
-          "command": "opencode-sidebar-web.closePanel",
-          "group": "navigation",
-          "when": "!config.opencode-sidebar-web.hideButton && opencodeSidebarPanelVisible"
+          "command": "opencode-sidebar-web.stopServer",
+          "when": "view == opencode-sidebar-web.view && opencodeSidebarServerRunning",
+          "group": "navigation"
+        },
+        {
+          "command": "opencode-sidebar-web.restartServer",
+          "when": "view == opencode-sidebar-web.view && opencodeSidebarServerRunning",
+          "group": "navigation"
         }
       ]
     },
@@ -109,6 +139,14 @@
           "type": "number",
           "default": 3,
           "description": "Número máximo de intentos de reconexión"
+        },
+        "opencode-sidebar-web.sidebarPosition": {
+          "type": "string",
+          "default": "right",
+          "enum": [
+            "right"
+          ],
+          "description": "OpenCode siempre aparece en el secondary sidebar (lado derecho). Esta opción se mantiene por compatibilidad."
         }
       }
     }

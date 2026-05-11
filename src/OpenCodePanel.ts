@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { OpenCodeServer } from './OpenCodeServer';
 
-export class OpenCodePanel {
-  static readonly viewType = 'opencode-sidebar-web.panel';
-  private panel: vscode.WebviewPanel | null = null;
+export class OpenCodePanel implements vscode.WebviewViewProvider {
+  public static readonly viewType = 'opencode-sidebar-web.view';
+  private _view: vscode.WebviewView | undefined;
+  private _panelVisible = false;
   private _isStarting = false;
   private _errorMessage = '';
   private _serverCrashed = false;
@@ -14,28 +15,23 @@ export class OpenCodePanel {
     private readonly _onStartServer: () => Promise<void>
   ) {}
 
-  async show(): Promise<void> {
-    if (this.panel) {
-      this.panel.reveal(undefined, true);
-      return;
-    }
+  resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ): void {
+    this._view = webviewView;
+    this._panelVisible = true;
 
-    this.panel = vscode.window.createWebviewPanel(
-      OpenCodePanel.viewType,
-      'OpenCode',
-      vscode.ViewColumn.Beside,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true,
-        localResourceRoots: [this._extensionUri],
-      }
-    );
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri],
+    };
 
-    this.panel.iconPath = vscode.Uri.joinPath(this._extensionUri, 'media', 'icon.svg');
-    vscode.commands.executeCommand('setContext', 'opencodeSidebarPanelVisible', true);
-
-    this.panel.webview.onDidReceiveMessage(async (msg) => {
-      if (msg.type === 'startServer') {
+    webviewView.webview.onDidReceiveMessage(async (msg) => {
+      if (msg.type === 'closePanel') {
+        vscode.commands.executeCommand('opencode-sidebar-web.openPanel');
+      } else if (msg.type === 'startServer') {
         this._errorMessage = '';
         this._serverCrashed = false;
         this._isStarting = true;
@@ -51,22 +47,42 @@ export class OpenCodePanel {
       }
     });
 
-    this.panel.onDidDispose(() => {
-      this.panel = null;
+    webviewView.onDidDispose(() => {
+      this._view = undefined;
+      this._panelVisible = false;
       vscode.commands.executeCommand('setContext', 'opencodeSidebarPanelVisible', false);
     });
+
+    webviewView.onDidChangeVisibility(() => {
+      this._panelVisible = webviewView.visible;
+      vscode.commands.executeCommand('setContext', 'opencodeSidebarPanelVisible', webviewView.visible);
+    });
+
+    vscode.commands.executeCommand('setContext', 'opencodeSidebarPanelVisible', true);
 
     this.render();
   }
 
   get isVisible(): boolean {
-    return this.panel?.visible ?? false;
+    return this._panelVisible;
   }
 
-  close(): void {
-    this.panel?.dispose();
-    this.panel = null;
+  async show(): Promise<void> {
+    if (this._panelVisible) {
+      return;
+    }
+    await vscode.commands.executeCommand('workbench.view.extension.opencode-sidebar-web');
+  }
+
+  async close(): Promise<void> {
+    this._panelVisible = false;
+    this._view = undefined;
     vscode.commands.executeCommand('setContext', 'opencodeSidebarPanelVisible', false);
+    try {
+      await vscode.commands.executeCommand('workbench.action.agentToggleSecondarySidebarVisibility');
+    } catch {
+      await vscode.commands.executeCommand('workbench.action.toggleSecondarySidebarVisibility');
+    }
   }
 
   setError(message: string): void {
@@ -88,9 +104,9 @@ export class OpenCodePanel {
   }
 
   render(): void {
-    const p = this.panel;
-    if (!p) { return; }
-    p.webview.html = this.getHtmlContent();
+    const view = this._view;
+    if (!view) { return; }
+    view.webview.html = this.getHtmlContent();
   }
 
   private getHtmlContent(): string {
@@ -210,6 +226,7 @@ export class OpenCodePanel {
     <span class="spacer"></span>
     <a onclick="showLogs()">Logs</a>
     <a onclick="openSettings()" style="margin-left:8px">Settings</a>
+    <a onclick="closePanel()" style="margin-left:8px">Close</a>
   </div>
 
   <iframe id="ocFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
@@ -232,6 +249,10 @@ export class OpenCodePanel {
 
     function openSettings() {
       vscode.postMessage({ type: 'openSettings' });
+    }
+
+    function closePanel() {
+      vscode.postMessage({ type: 'closePanel' });
     }
 
     function syncTheme() {

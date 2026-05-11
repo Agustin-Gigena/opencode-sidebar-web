@@ -1,0 +1,36 @@
+name: Release VSIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.0.0)"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - name: Update version
+        run: npm version ${{ inputs.version }} --no-git-tag-version
+
+      - name: Build extension
+        run: npm run esbuild
+
+      - name: Package VSIX
+        run: npx vsce package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencode-sidebar-web-${{ inputs.version }}
+          path: "*.vsix"

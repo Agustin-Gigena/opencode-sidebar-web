@@ -9,6 +9,11 @@ let serverWasEverRunning = false;
 export async function activate(context: vscode.ExtensionContext) {
   server = new OpenCodeServer(context);
   panel = new OpenCodePanel(context.extensionUri, server, startServer);
+  vscode.commands.executeCommand('setContext', 'opencodeSidebarServerRunning', false);
+
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(OpenCodePanel.viewType, panel)
+  );
 
   if (!server.isBinaryInstalled()) {
     const install = await vscode.window.showInformationMessage(
@@ -78,6 +83,7 @@ export async function activate(context: vscode.ExtensionContext) {
   );
 
   server.onDidChangeStatus((running) => {
+    vscode.commands.executeCommand('setContext', 'opencodeSidebarServerRunning', running);
     if (running) {
       reconnectCanceled = false;
       serverWasEverRunning = true;
@@ -89,12 +95,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
-  if (config.get('autoStart', false)) {
-    server.start()
-      .then(() => panel?.render())
-      .catch((err) => console.error('Auto-start failed:', err));
-  }
+  positionPanel();
 }
 
 async function startServer(): Promise<void> {
@@ -128,6 +129,15 @@ async function attemptReconnect(): Promise<void> {
       await server.start();
       return;
     } catch { /* next attempt */ }
+  }
+}
+
+function positionPanel(): void {
+  const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+  if (config.get('autoStart', false)) {
+    server!.start()
+      .then(() => panel?.render())
+      .catch((err) => console.error('Auto-start failed:', err));
   }
 }
 
