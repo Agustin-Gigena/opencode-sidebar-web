@@ -21,6 +21,9 @@ jobs:
       - run: npm ci
       - run: npm run compile
       - run: npm run lint
+      - name: Install opencode for tests
+        if: runner.os == 'Linux'
+        run: npm install opencode-ai --no-audit --no-fund
       - name: Run tests
         if: runner.os == 'Linux'
         run: xvfb-run -a npm test
