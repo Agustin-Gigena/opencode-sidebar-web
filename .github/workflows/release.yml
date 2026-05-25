@@ -33,7 +33,7 @@ jobs:
         run: xvfb-run -a npm test
 
       - name: Update version
-        run: npm version ${{ inputs.version }} --no-git-tag-version
+        run: npm version ${{ inputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Build extension
         run: npm run esbuild
