@@ -7,6 +7,10 @@ suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
 
   test('Commands are registered', async () => {
+    const ext = vscode.extensions.getExtension('agustin-gigena.opencode-sidebar-web');
+    if (ext && !ext.isActive) {
+      await ext.activate();
+    }
     const commands = await vscode.commands.getCommands();
     assert.ok(commands.includes('opencode-sidebar-web.openPanel'));
     assert.ok(commands.includes('opencode-sidebar-web.closePanel'));
