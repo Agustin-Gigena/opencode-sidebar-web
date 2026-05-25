@@ -1,0 +1,17 @@
+{
+  "name": "OpenCode Sidebar Web Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "forwardPorts": [4096],
+  "postCreateCommand": "npm install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "agustin-gigena.opencode-sidebar-web",
+        "github.vscode-github-actions"
+      ],
+      "settings": {
+        "opencode-sidebar-web.devcontainerMode": true
+      }
+    }
+  }
+}
