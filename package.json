@@ -80,6 +80,10 @@
       {
         "command": "opencode-sidebar-web.focusPanel",
         "title": "OpenCode: Enfocar panel"
+      },
+      {
+        "command": "opencode-sidebar-web.installBinary",
+        "title": "OpenCode: Instalar binario opencode"
       }
     ],
     "menus": {
@@ -104,6 +108,11 @@
         {
           "command": "opencode-sidebar-web.restartServer",
           "when": "view == opencode-sidebar-web.view && opencodeSidebarServerRunning",
+          "group": "navigation"
+        },
+        {
+          "command": "opencode-sidebar-web.installBinary",
+          "when": "view == opencode-sidebar-web.view && !opencodeSidebarBinaryInstalled",
           "group": "navigation"
         }
       ]

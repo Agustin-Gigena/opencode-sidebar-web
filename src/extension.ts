@@ -10,6 +10,7 @@ export async function activate(context: vscode.ExtensionContext) {
   server = new OpenCodeServer(context);
   panel = new OpenCodePanel(context.extensionUri, server, startServer);
   vscode.commands.executeCommand('setContext', 'opencodeSidebarServerRunning', false);
+  vscode.commands.executeCommand('setContext', 'opencodeSidebarBinaryInstalled', server.isBinaryInstalled());
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(OpenCodePanel.viewType, panel)
@@ -32,28 +33,17 @@ export async function activate(context: vscode.ExtensionContext) {
     if (action === 'View Details') {
       server.outputChannel.show();
     } else if (action === 'Install') {
-      await vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'Installing OpenCode...',
-          cancellable: false,
-        },
-        async (progress) => {
-          progress.report({ message: 'Downloading opencode-ai...' });
-          try {
-            await server!.installBinary();
-            progress.report({ message: 'Done!' });
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : 'Unknown error';
-            const viewLogs = 'View Logs';
-            const result = await vscode.window.showErrorMessage(
-              `Installation failed: ${msg}`, viewLogs
-            );
-            if (result === viewLogs) {server!.outputChannel.show();}
-            throw err;
-          }
-        }
-      );
+      try {
+        await server!.installBinary();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        const viewLogs = 'View Logs';
+        const result = await vscode.window.showErrorMessage(
+          `Installation failed: ${msg}`, viewLogs
+        );
+        if (result === viewLogs) {server!.outputChannel.show();}
+        throw err;
+      }
     }
   }
 
@@ -108,6 +98,24 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('opencode-sidebar-web.openFile', async (uri: vscode.Uri | string) => {
       const fileUri = typeof uri === 'string' ? vscode.Uri.parse(uri) : uri;
       await vscode.commands.executeCommand('vscode.open', fileUri);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.installBinary', async () => {
+      try {
+        await server!.installBinary();
+        vscode.commands.executeCommand('setContext', 'opencodeSidebarBinaryInstalled', true);
+        vscode.window.showInformationMessage('OpenCode binary installed successfully.');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        const viewLogs = 'View Logs';
+        const result = await vscode.window.showErrorMessage(
+          `Installation failed: ${msg}`, viewLogs
+        );
+        if (result === viewLogs) { server!.outputChannel.show(); }
+        throw err;
+      }
     })
   );
 

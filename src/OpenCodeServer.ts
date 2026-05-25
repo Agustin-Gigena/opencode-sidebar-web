@@ -57,6 +57,10 @@ export class OpenCodeServer {
   }
 
   async installBinary(): Promise<void> {
+    this._outputChannel.show(true);
+    this._outputChannel.appendLine('Installing opencode-ai...');
+    this._outputChannel.appendLine('');
+
     return new Promise((resolve, reject) => {
       const proc = spawn('npm', [
         'install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'
@@ -65,15 +69,34 @@ export class OpenCodeServer {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
+      let chunks = 0;
+      let lastBar = '';
+      const writeBar = (percent: number) => {
+        const barWidth = 30;
+        const filled = Math.round((percent / 100) * barWidth);
+        const bar = `${percent}% [${'#'.repeat(filled)}${' '.repeat(barWidth - filled)}]`;
+        if (bar !== lastBar) {
+          this._outputChannel.appendLine(bar);
+          lastBar = bar;
+        }
+      };
+
       proc.stdout?.on('data', (data: Buffer) => {
         this._outputChannel.append(data.toString());
       });
       proc.stderr?.on('data', (data: Buffer) => {
-        this._outputChannel.append(data.toString());
+        const text = data.toString();
+        this._outputChannel.append(text);
+        chunks++;
+        const percent = Math.min(Math.round(chunks / 80 * 100), 99);
+        writeBar(percent);
       });
 
       proc.on('exit', (code) => {
         if (code === 0) {
+          writeBar(100);
+          this._outputChannel.appendLine('');
+          this._outputChannel.appendLine('Installation complete!');
           resolve();
         } else {
           reject(new Error(`npm install exited with code ${code}. Check logs for details.`));

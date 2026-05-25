@@ -6,7 +6,6 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "agustin-gigena.opencode-sidebar-web",
         "github.vscode-github-actions"
       ],
       "settings": {
