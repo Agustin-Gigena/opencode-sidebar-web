@@ -2,7 +2,7 @@
   "name": "opencode-sidebar-web",
   "displayName": "OpenCode Sidebar Web",
   "description": "Integra la interfaz web de OpenCode en un panel lateral derecho de VS Code.",
-  "version": "0.0.1",
+  "version": "0.7.1",
   "publisher": "agustin-gigena",
   "repository": {
     "type": "git",
@@ -164,6 +164,11 @@
           "type": "boolean",
           "default": true,
           "description": "Detectar automáticamente opencode corriendo en el devcontainer/remoto"
+        },
+        "opencode-sidebar-web.autoInstallInDevcontainer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Instalar automáticamente opencode al activarse en un devcontainer si no está presente"
         }
       }
     }
@@ -188,5 +193,8 @@
     "eslint": "^9.39.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1"
+  },
+  "dependencies": {
+    "opencode-ai": "^1.15.10"
   }
 }

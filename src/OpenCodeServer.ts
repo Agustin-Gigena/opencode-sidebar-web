@@ -56,54 +56,102 @@ export class OpenCodeServer {
     return this.findBinaryPath() !== undefined;
   }
 
+  private _installTerminal: vscode.Terminal | null = null;
+
   async installBinary(): Promise<void> {
-    this._outputChannel.show(true);
-    this._outputChannel.appendLine('Installing opencode-ai...');
-    this._outputChannel.appendLine('');
+    if (this._installTerminal) {
+      this._installTerminal.dispose();
+      this._installTerminal = null;
+    }
 
-    return new Promise((resolve, reject) => {
-      const proc = spawn('npm', [
-        'install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'
-      ], {
-        cwd: this._extensionPath,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+    const writeEmitter = new vscode.EventEmitter<string>();
+    let npmProcess: ChildProcess | null = null;
 
-      let chunks = 0;
-      let lastBar = '';
-      const writeBar = (percent: number) => {
+    const pty: vscode.Pseudoterminal = {
+      onDidWrite: writeEmitter.event,
+      open: () => {
+        writeEmitter.fire('Installing opencode-ai...\r\n\r\n');
+      },
+      close: () => {
+        if (npmProcess && npmProcess.exitCode === null) {
+          npmProcess.kill('SIGTERM');
+        }
+      }
+    };
+
+    this._installTerminal = vscode.window.createTerminal({
+      name: 'OpenCode Install',
+      pty,
+    });
+    this._installTerminal.show();
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Installing OpenCode...',
+      cancellable: false,
+    }, async (progress) => {
+      return new Promise<void>((resolve, reject) => {
+        npmProcess = spawn('npm', [
+          'install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'
+        ], {
+          cwd: this._extensionPath,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+        const startTime = Date.now();
+        const ESTIMATED_DURATION = 30000;
+        let lineCount = 0;
+        let completed = false;
+
         const barWidth = 30;
-        const filled = Math.round((percent / 100) * barWidth);
-        const bar = `${percent}% [${'#'.repeat(filled)}${' '.repeat(barWidth - filled)}]`;
-        if (bar !== lastBar) {
-          this._outputChannel.appendLine(bar);
-          lastBar = bar;
-        }
-      };
+        const renderBar = (pct: number) => {
+          const filled = Math.round((pct / 100) * barWidth);
+          return `${Math.round(pct)}% [${'#'.repeat(filled)}${' '.repeat(barWidth - filled)}]`;
+        };
 
-      proc.stdout?.on('data', (data: Buffer) => {
-        this._outputChannel.append(data.toString());
-      });
-      proc.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        this._outputChannel.append(text);
-        chunks++;
-        const percent = Math.min(Math.round(chunks / 80 * 100), 99);
-        writeBar(percent);
-      });
+        const updateProgress = () => {
+          if (completed) { return; }
+          const elapsed = Date.now() - startTime;
+          const timePct = Math.min(elapsed / ESTIMATED_DURATION * 100, 90);
+          const linePct = Math.min(lineCount / 25 * 100, 90);
+          const pct = Math.max(timePct, linePct);
+          const bar = renderBar(pct);
+          progress.report({ message: bar });
+          writeEmitter.fire(`\r${bar}`);
+        };
 
-      proc.on('exit', (code) => {
-        if (code === 0) {
-          writeBar(100);
-          this._outputChannel.appendLine('');
-          this._outputChannel.appendLine('Installation complete!');
-          resolve();
-        } else {
-          reject(new Error(`npm install exited with code ${code}. Check logs for details.`));
-        }
-      });
-      proc.on('error', (err) => {
-        reject(new Error(`npm install failed: ${err.message}`));
+        const timer = setInterval(updateProgress, 200);
+
+        npmProcess.stdout?.on('data', (data: Buffer) => {
+          writeEmitter.fire(data.toString());
+        });
+
+        npmProcess.stderr?.on('data', (data: Buffer) => {
+          const text = data.toString();
+          writeEmitter.fire(text);
+          lineCount += (text.match(/\n/g) || []).length;
+          updateProgress();
+        });
+
+        npmProcess.on('exit', (code) => {
+          completed = true;
+          clearInterval(timer);
+          if (code === 0) {
+            const bar = renderBar(100);
+            progress.report({ message: bar });
+            writeEmitter.fire(`\r${bar}\r\n\r\n`);
+            writeEmitter.fire('Installation complete!\r\n');
+            resolve();
+          } else {
+            reject(new Error(`npm install exited with code ${code}. Check terminal for details.`));
+          }
+        });
+
+        npmProcess.on('error', (err) => {
+          completed = true;
+          clearInterval(timer);
+          reject(new Error(`npm install failed: ${err.message}`));
+        });
       });
     });
   }
@@ -304,6 +352,7 @@ export class OpenCodeServer {
   get lastExitCode(): number | null { return this._processExitCode; }
   get outputChannel(): vscode.OutputChannel { return this._outputChannel; }
   get isConnectedToExisting(): boolean { return this._existingServerUrl !== null; }
+  get installTerminal(): vscode.Terminal | null { return this._installTerminal; }
 
   async start(): Promise<void> {
     if (this._isRunning) { return; }
@@ -332,21 +381,33 @@ export class OpenCodeServer {
       );
     }
 
-    const binary = this.findBinaryPath();
+    let binary = this.findBinaryPath();
     if (!binary) {
-      throw new Error(
-        `OpenCode binary not found. Run "npm install ${OPENCODE_PACKAGE}" in the extension directory, or use the "Install OpenCode" command.`
-      );
+      if (this.isRemoteEnvironment()) {
+        this._outputChannel.appendLine('OpenCode binary not found. Installing...');
+        await this.installBinary();
+        binary = this.findBinaryPath();
+      }
+      if (!binary) {
+        throw new Error(
+          `OpenCode binary not found. Run "npm install ${OPENCODE_PACKAGE}" in the extension directory, or use the "Install OpenCode" command.`
+        );
+      }
     }
 
     this._outputChannel.appendLine(`Starting OpenCode server...`);
     this._outputChannel.appendLine(`Binary: ${binary}`);
 
-    this._outputChannel.appendLine(
-      `Run manually to debug: ${binary} serve --port 0 --hostname ${this._hostname}`
-    );
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
     const args = ['serve', '--port', '0', '--hostname', this._hostname];
+    if (workspaceFolder) {
+      args.push('--cwd', workspaceFolder);
+    }
+
+    this._outputChannel.appendLine(
+      `Run manually to debug: ${binary} ${args.join(' ')}`
+    );
 
     this.process = spawn(binary, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
