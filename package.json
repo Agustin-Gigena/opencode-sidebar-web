@@ -9,7 +9,7 @@
     "url": "https://github.com/agustin-gigena/opencode-sidebar-web"
   },
   "engines": {
-    "vscode": "^1.118.0"
+    "vscode": "^1.106.0"
   },
   "extensionKind": [
     "workspace"
