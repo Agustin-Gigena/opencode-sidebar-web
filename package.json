@@ -11,6 +11,9 @@
   "engines": {
     "vscode": "^1.118.0"
   },
+  "extensionKind": [
+    "workspace"
+  ],
   "icon": "media/icon.png",
   "categories": [
     "Other",
@@ -147,6 +150,11 @@
             "right"
           ],
           "description": "OpenCode siempre aparece en el secondary sidebar (lado derecho). Esta opción se mantiene por compatibilidad."
+        },
+        "opencode-sidebar-web.devcontainerMode": {
+          "type": "boolean",
+          "default": true,
+          "description": "Detectar automáticamente opencode corriendo en el devcontainer/remoto"
         }
       }
     }
