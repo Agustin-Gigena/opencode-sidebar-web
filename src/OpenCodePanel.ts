@@ -110,13 +110,18 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
   }
 
   private getHtmlContent(): string {
-    const proxyUrl = this._server.isRunning ? this._server.proxyUrl : '';
+    const webviewUrl = this._server.isRunning ? this._server.webviewUrl : '';
 
     let statusColor: string;
     let statusText: string;
+    let portLabel = '';
     if (this._server.isRunning) {
       statusColor = '#4ec94e';
-      statusText = `Connected \u25CF  port ${this._server.proxyPort}`;
+      if (this._server.isConnectedToExisting) {
+        portLabel = ' (existing)';
+      }
+      const displayPort = this._server.proxyPort || this._server.port;
+      statusText = `Connected \u25CF  port ${displayPort}${portLabel}`;
     } else if (this._isStarting) {
       statusColor = '#e5c07b';
       statusText = 'Starting...';
@@ -151,13 +156,20 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         `<button class="secondary" onclick="showLogs()">View Logs</button></div>`;
     }
 
+    const webviewOrigin = webviewUrl
+      ? (() => { try { return new URL(webviewUrl).origin; } catch { return ''; } })()
+      : '';
+    const baseCsp = "default-src 'self' http://127.0.0.1:* http://localhost:*;";
+    const frameSrc = webviewOrigin
+      ? `frame-src http://127.0.0.1:* http://localhost:* ${webviewOrigin};`
+      : "frame-src http://127.0.0.1:* http://localhost:*;";
     const csp = [
-      "default-src 'self' http://127.0.0.1:* http://localhost:*;",
-      "frame-src http://127.0.0.1:* http://localhost:*;",
+      baseCsp,
+      frameSrc,
       "style-src 'self' 'unsafe-inline';",
       "script-src 'self' 'unsafe-inline';",
-      "img-src 'self' http://127.0.0.1:* http://localhost:* https: data:;",
-      "connect-src 'self' http://127.0.0.1:* http://localhost:* https: data:;",
+      `img-src 'self' http://127.0.0.1:* http://localhost:* ${webviewOrigin || 'https:'} data:;`,
+      `connect-src 'self' http://127.0.0.1:* http://localhost:* ${webviewOrigin || 'https:'} data:;`,
       "font-src 'self' http://127.0.0.1:* data:;",
     ].join(' ');
 
@@ -230,10 +242,10 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
   </div>
 
   <iframe id="ocFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-    ${proxyUrl ? `src="${proxyUrl}"` : ''}></iframe>
+    ${webviewUrl ? `src="${webviewUrl}"` : ''}></iframe>
 
-  <div id="overlay" class="overlay ${proxyUrl ? 'hidden' : ''}">
-    ${proxyUrl ? '' : overlayContent}
+  <div id="overlay" class="overlay ${webviewUrl ? 'hidden' : ''}">
+    ${webviewUrl ? '' : overlayContent}
   </div>
 
   <script>
