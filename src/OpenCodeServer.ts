@@ -401,15 +401,13 @@ export class OpenCodeServer {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 
     const args = ['serve', '--port', '0', '--hostname', this._hostname];
-    if (workspaceFolder) {
-      args.push('--cwd', workspaceFolder);
-    }
 
     this._outputChannel.appendLine(
-      `Run manually to debug: ${binary} ${args.join(' ')}`
+      `Run manually to debug: ${binary} ${args.join(' ')}${workspaceFolder ? ` (cwd: ${workspaceFolder})` : ''}`
     );
 
     this.process = spawn(binary, args, {
+      cwd: workspaceFolder || undefined,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
