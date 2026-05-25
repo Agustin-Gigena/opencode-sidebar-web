@@ -13,6 +13,13 @@ const CSP_HEADERS = [
 
 const PORT_REGEX = /listening on https?:\/\/[^:]+:(\d+)/i;
 const OPENCODE_PACKAGE = 'opencode-ai';
+const OPENCODE_DEFAULT_PORT = 4096;
+const HEALTH_ENDPOINT = '/global/health';
+
+interface DetectedServer {
+  url: string;
+  password?: string;
+}
 
 export class OpenCodeServer {
   private process: ChildProcess | null = null;
@@ -30,6 +37,8 @@ export class OpenCodeServer {
   private _onDidChangeStatus = new vscode.EventEmitter<boolean>();
   readonly onDidChangeStatus = this._onDidChangeStatus.event;
   private _extensionPath: string;
+  private _existingServerUrl: string | null = null;
+  private _webviewUrl: string = '';
 
   constructor(context: vscode.ExtensionContext) {
     this._extensionPath = context.extensionPath;
@@ -49,26 +58,180 @@ export class OpenCodeServer {
 
   async installBinary(): Promise<void> {
     return new Promise((resolve, reject) => {
-      exec(
-        `npm install ${OPENCODE_PACKAGE}@latest --no-audit --no-fund`,
-        { cwd: this._extensionPath, timeout: 120000 },
-        (error, stdout, stderr) => {
-          this._outputChannel.appendLine(stdout);
-          if (stderr) { this._outputChannel.appendLine(stderr); }
-          if (error) {
-            reject(new Error(`npm install failed: ${error.message}`));
-          } else {
-            resolve();
-          }
+      const proc = spawn('npm', [
+        'install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'
+      ], {
+        cwd: this._extensionPath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      proc.stdout?.on('data', (data: Buffer) => {
+        this._outputChannel.append(data.toString());
+      });
+      proc.stderr?.on('data', (data: Buffer) => {
+        this._outputChannel.append(data.toString());
+      });
+
+      proc.on('exit', (code) => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`npm install exited with code ${code}. Check logs for details.`));
         }
-      );
+      });
+      proc.on('error', (err) => {
+        reject(new Error(`npm install failed: ${err.message}`));
+      });
     });
+  }
+
+  isRemoteEnvironment(): boolean {
+    return vscode.env.remoteName !== undefined;
+  }
+
+  async detectExistingServer(): Promise<DetectedServer | null> {
+    const envPassword = process.env.OPENCODE_SERVER_PASSWORD;
+    const results: Array<{ url: string; password?: string }> = [];
+
+    // 1. Check env vars
+    const envUrl = process.env.OPENCODE_URL;
+    const envPort = process.env.OPENCODE_PORT;
+    if (envUrl) {
+      results.push({ url: envUrl, password: envPassword || undefined });
+    }
+    if (envPort) {
+      results.push({ url: `http://127.0.0.1:${envPort}`, password: envPassword || undefined });
+    }
+
+    // 2. Try pgrep to find running opencode process
+    try {
+      const pgrepOut = execSync('pgrep -x opencode', { encoding: 'utf8', timeout: 5000 });
+      const pids = pgrepOut.trim().split('\n').filter(Boolean);
+      for (const pid of pids) {
+        try {
+          const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+          const args = cmdline.split('\0');
+          let port = OPENCODE_DEFAULT_PORT;
+          let hostname = '127.0.0.1';
+          for (let i = 0; i < args.length; i++) {
+            if (args[i] === '--port' && i + 1 < args.length) {port = parseInt(args[i + 1], 10);}
+            if (args[i] === '--hostname' && i + 1 < args.length) {hostname = args[i + 1];}
+          }
+          if (port !== 0) {
+            results.push({ url: `http://${hostname}:${port}`, password: envPassword || undefined });
+          }
+        } catch { /* skip unreadable process */ }
+      }
+    } catch { /* pgrep not available or no process */ }
+
+    // 3. Try default port 4096 only if binary is installed
+    if (this.findBinaryPath()) {
+      results.push({ url: `http://127.0.0.1:${OPENCODE_DEFAULT_PORT}`, password: envPassword || undefined });
+    }
+
+    // Health check each candidate, return first that responds
+    for (const candidate of results) {
+      try {
+        const headers: Record<string, string> = {};
+        if (candidate.password) {
+          headers['Authorization'] = `Basic ${Buffer.from(
+            `opencode:${candidate.password}`
+          ).toString('base64')}`;
+        }
+        const resp = await fetch(`${candidate.url}${HEALTH_ENDPOINT}`, {
+          signal: AbortSignal.timeout(2000),
+          headers: Object.keys(headers).length ? headers : undefined,
+        });
+        if (resp.ok) {
+          this._outputChannel.appendLine(`Detected existing server at ${candidate.url}`);
+          return candidate;
+        }
+      } catch { /* try next */ }
+    }
+
+    return null;
+  }
+
+  async connectToExisting(detected: DetectedServer): Promise<void> {
+    this._existingServerUrl = detected.url;
+    this._outputChannel.appendLine(`Connecting to existing OpenCode server at ${detected.url}`);
+
+    const parsedUrl = new URL(detected.url);
+    this._hostname = parsedUrl.hostname;
+    this._port = parseInt(parsedUrl.port, 10);
+    this.process = null;
+    this._processExited = false;
+    this._processError = '';
+
+    const needsProxy = await this.checkNeedsProxy(detected);
+    if (needsProxy) {
+      this._outputChannel.appendLine('Server has frame-blocking headers, starting proxy...');
+      await this.startProxy();
+      await this.resolveWebviewUrl();
+    } else {
+      const localUri = vscode.Uri.parse(detected.url);
+      if (this.isRemoteEnvironment()) {
+        const external = await vscode.env.asExternalUri(localUri);
+        this._webviewUrl = external.toString();
+      } else {
+        this._webviewUrl = detected.url;
+      }
+    }
+
+    this._isRunning = true;
+    this.updateStatusBar();
+    this._onDidChangeStatus.fire(true);
+    this._outputChannel.appendLine(`Connected to existing server at ${detected.url}`);
+  }
+
+  private async checkNeedsProxy(detected: DetectedServer): Promise<boolean> {
+    try {
+      const headers: Record<string, string> = {};
+      if (detected.password) {
+        headers['Authorization'] = `Basic ${Buffer.from(
+          `opencode:${detected.password}`
+        ).toString('base64')}`;
+      }
+      const resp = await fetch(`${detected.url}${HEALTH_ENDPOINT}`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000),
+        headers: Object.keys(headers).length ? headers : undefined,
+      });
+
+      const xfo = resp.headers.get('x-frame-options');
+      if (xfo) {
+        this._outputChannel.appendLine(`Detected X-Frame-Options: ${xfo}`);
+        return true;
+      }
+
+      const csp = resp.headers.get('content-security-policy');
+      if (csp && csp.toLowerCase().includes('frame-ancestors')) {
+        this._outputChannel.appendLine(`Detected CSP frame-ancestors`);
+        return true;
+      }
+
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
+  private async resolveWebviewUrl(): Promise<void> {
+    if (this.isRemoteEnvironment() && this._proxyPort > 0) {
+      const localUri = vscode.Uri.parse(`http://${this._hostname}:${this._proxyPort}`);
+      const external = await vscode.env.asExternalUri(localUri);
+      this._webviewUrl = external.toString();
+      this._outputChannel.appendLine(`Resolved external URI: ${this._webviewUrl}`);
+    } else if (this._proxyPort > 0) {
+      this._webviewUrl = `http://${this._hostname}:${this._proxyPort}`;
+    } else if (!this._webviewUrl) {
+      this._webviewUrl = this.proxyUrl;
+    }
   }
 
   private findBinaryPath(): string | undefined {
     const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
 
-    // 1. Check if opencode is in system PATH
     try {
       const which = execSync(
         platform() === 'win32' ? `where ${binaryName}` : `which ${binaryName}`,
@@ -80,11 +243,9 @@ export class OpenCodeServer {
 
     const extModules = path.join(this._extensionPath, 'node_modules');
 
-    // 2. Hidden ELF binary inside opencode-ai (npm install local)
     const hidden = path.join(extModules, 'opencode-ai', 'bin', '.opencode');
     try { fs.accessSync(hidden, fs.constants.X_OK); return hidden; } catch { /* next */ }
 
-    // 3. Platform-specific packages
     const plat = platform() === 'win32' ? 'windows' : platform() === 'darwin' ? 'darwin' : 'linux';
     const archName = arch();
     const candidates = [
@@ -98,13 +259,11 @@ export class OpenCodeServer {
       try { fs.accessSync(c, fs.constants.X_OK); return c; } catch { /* next */ }
     }
 
-    // 4. npm .bin symlink
     const wrapper = path.join(extModules, '.bin', 'opencode');
     if (fs.existsSync(wrapper)) { return wrapper; }
     const winWrapper = wrapper + '.cmd';
     if (fs.existsSync(winWrapper)) { return winWrapper; }
 
-    // 5. opencode-ai wrapper script
     const aiWrapper = path.join(extModules, 'opencode-ai', 'bin', 'opencode');
     if (fs.existsSync(aiWrapper)) { return aiWrapper; }
 
@@ -117,9 +276,11 @@ export class OpenCodeServer {
   get isRunning(): boolean { return this._isRunning; }
   get serverUrl(): string { return `http://${this._hostname}:${this._port}`; }
   get proxyUrl(): string { return `http://${this._hostname}:${this._proxyPort}`; }
+  get webviewUrl(): string { return this._webviewUrl || this.proxyUrl; }
   get lastError(): string { return this._processError; }
   get lastExitCode(): number | null { return this._processExitCode; }
   get outputChannel(): vscode.OutputChannel { return this._outputChannel; }
+  get isConnectedToExisting(): boolean { return this._existingServerUrl !== null; }
 
   async start(): Promise<void> {
     if (this._isRunning) { return; }
@@ -128,9 +289,25 @@ export class OpenCodeServer {
     this._processError = '';
     this._outputBuffer = '';
     this._port = 0;
+    this._existingServerUrl = null;
+    this._webviewUrl = '';
 
     this._hostname = vscode.workspace.getConfiguration('opencode-sidebar-web')
       .get('hostname', '127.0.0.1');
+
+    const devcontainerMode = vscode.workspace.getConfiguration('opencode-sidebar-web')
+      .get('devcontainerMode', true);
+
+    if (this.isRemoteEnvironment() && devcontainerMode) {
+      const existing = await this.detectExistingServer();
+      if (existing) {
+        await this.connectToExisting(existing);
+        return;
+      }
+      this._outputChannel.appendLine(
+        'No existing OpenCode server detected, will start a new one...'
+      );
+    }
 
     const binary = this.findBinaryPath();
     if (!binary) {
@@ -178,6 +355,7 @@ export class OpenCodeServer {
 
     await this.waitForServer();
     await this.startProxy();
+    await this.resolveWebviewUrl();
 
     this._isRunning = true;
     this.updateStatusBar();
@@ -229,7 +407,7 @@ export class OpenCodeServer {
       }
 
       try {
-        const response = await fetch(`${this.serverUrl}/global/health`, {
+        const response = await fetch(`${this.serverUrl}${HEALTH_ENDPOINT}`, {
           signal: AbortSignal.timeout(2000),
         });
         if (response.ok) {
@@ -249,7 +427,7 @@ export class OpenCodeServer {
     throw new Error(`Server did not start within timeout (${reason})`);
   }
 
-  private async startProxy(): Promise<void> {
+  private async startProxy(targetUrl?: string): Promise<void> {
     return new Promise((resolve) => {
       this.proxy = http.createServer((req, res) => {
         if (req.method === 'OPTIONS') {
@@ -263,10 +441,11 @@ export class OpenCodeServer {
           return;
         }
 
-        const targetUrl = `${this.serverUrl}${req.url}`;
-        const proxyReq = http.request(targetUrl, {
+        const upstream = targetUrl || this.serverUrl;
+        const target = `${upstream}${req.url}`;
+        const proxyReq = http.request(target, {
           method: req.method,
-          headers: { ...req.headers, host: `127.0.0.1:${this._port}` },
+          headers: { ...req.headers, host: `${this._hostname}:${this._port}` },
         }, (proxyRes) => {
           const headers = { ...proxyRes.headers };
           for (const h of CSP_HEADERS) { delete headers[h]; }
@@ -306,7 +485,18 @@ export class OpenCodeServer {
   }
 
   async stop(): Promise<void> {
-    if (!this.process && !this._isRunning) { return; }
+    if (!this._isRunning) { return; }
+
+    if (this._existingServerUrl) {
+      this._outputChannel.appendLine('Disconnecting from existing server...');
+      this.stopProxy();
+      this._existingServerUrl = null;
+      this._webviewUrl = '';
+      this.cleanup();
+      this._outputChannel.appendLine('Disconnected from existing server');
+      return;
+    }
+
     this._outputChannel.appendLine('Stopping OpenCode server...');
 
     try {
