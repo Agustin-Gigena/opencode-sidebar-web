@@ -15,15 +15,44 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.registerWebviewViewProvider(OpenCodePanel.viewType, panel)
   );
 
-  if (!server.isBinaryInstalled()) {
-    const install = await vscode.window.showInformationMessage(
+  const devcontainerMode = vscode.workspace.getConfiguration('opencode-sidebar-web')
+    .get('devcontainerMode', true);
+
+  if (server.isRemoteEnvironment() && devcontainerMode) {
+    const existing = await server.detectExistingServer();
+    if (existing) {
+      await server.connectToExisting(existing);
+      panel?.render();
+    }
+  } else if (!server.isBinaryInstalled()) {
+    const action = await vscode.window.showInformationMessage(
       'OpenCode binary not found. Install it now?',
-      'Install'
+      'Install', 'View Details'
     );
-    if (install === 'Install') {
+    if (action === 'View Details') {
+      server.outputChannel.show();
+    } else if (action === 'Install') {
       await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Notification, title: 'Installing OpenCode...' },
-        async () => { await server!.installBinary(); }
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Installing OpenCode...',
+          cancellable: false,
+        },
+        async (progress) => {
+          progress.report({ message: 'Downloading opencode-ai...' });
+          try {
+            await server!.installBinary();
+            progress.report({ message: 'Done!' });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'Unknown error';
+            const viewLogs = 'View Logs';
+            const result = await vscode.window.showErrorMessage(
+              `Installation failed: ${msg}`, viewLogs
+            );
+            if (result === viewLogs) {server!.outputChannel.show();}
+            throw err;
+          }
+        }
       );
     }
   }
