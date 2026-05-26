@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "vscode-extension-planning",
+  "owner": "masayan1126",
+  "repo": "masayan-uni-code-plugins",
+  "path": "plugins/project-planner/skills/vscode-extension-planning",
+  "branch": "main",
+  "sha": "724ac0e7f359e124b64e81f3990d4622a50aad49",
+  "source": "manual"
+}
