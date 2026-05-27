@@ -22,7 +22,11 @@
   "activationEvents": [
     "onStartupFinished",
     "onCommand:opencode-sidebar-web.openPanel",
-    "onCommand:opencode-sidebar-web.startServer"
+    "onCommand:opencode-sidebar-web.startServer",
+    "onCommand:opencode-sidebar-web.explainSelection",
+    "onCommand:opencode-sidebar-web.refactorSelection",
+    "onCommand:opencode-sidebar-web.fixSelection",
+    "onCommand:opencode-sidebar-web.docsSelection"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -84,6 +88,28 @@
       {
         "command": "opencode-sidebar-web.installBinary",
         "title": "OpenCode: Instalar binario opencode"
+      },
+      {
+        "command": "opencode-sidebar-web.explainSelection",
+        "title": "OpenCode: Explain Selection"
+      },
+      {
+        "command": "opencode-sidebar-web.refactorSelection",
+        "title": "OpenCode: Refactor Selection"
+      },
+      {
+        "command": "opencode-sidebar-web.fixSelection",
+        "title": "OpenCode: Fix Selection"
+      },
+      {
+        "command": "opencode-sidebar-web.docsSelection",
+        "title": "OpenCode: Generate Docs"
+      }
+    ],
+    "submenus": [
+      {
+        "id": "opencode-sidebar-web.codeActions",
+        "label": "OpenCode"
       }
     ],
     "menus": {
@@ -114,6 +140,31 @@
           "command": "opencode-sidebar-web.installBinary",
           "when": "view == opencode-sidebar-web.view && !opencodeSidebarBinaryInstalled",
           "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "submenu": "opencode-sidebar-web.codeActions",
+          "group": "1_modification",
+          "when": "editorHasSelection"
+        }
+      ],
+      "opencode-sidebar-web.codeActions": [
+        {
+          "command": "opencode-sidebar-web.explainSelection",
+          "group": "1_explain"
+        },
+        {
+          "command": "opencode-sidebar-web.refactorSelection",
+          "group": "2_refactor"
+        },
+        {
+          "command": "opencode-sidebar-web.fixSelection",
+          "group": "3_fix"
+        },
+        {
+          "command": "opencode-sidebar-web.docsSelection",
+          "group": "4_docs"
         }
       ]
     },

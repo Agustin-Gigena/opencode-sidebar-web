@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { OpenCodeServer } from './OpenCodeServer';
 import { OpenCodePanel } from './OpenCodePanel';
+import { OpenCodeAPI } from './OpenCodeAPI';
+import { CodeLensProvider } from './CodeLensProvider';
 
 let server: OpenCodeServer | undefined;
 let panel: OpenCodePanel | undefined;
@@ -139,6 +141,131 @@ export async function activate(context: vscode.ExtensionContext) {
         if (result === viewTerminal) { server!.installTerminal?.show(); }
         throw err;
       }
+    })
+  );
+
+  const api = OpenCodeAPI.fromServer(server);
+  const codeLensProvider = new CodeLensProvider();
+  context.subscriptions.push(
+    vscode.languages.registerCodeLensProvider({ pattern: '**/*' }, codeLensProvider)
+  );
+
+  const codeActionPrompts: Record<string, string> = {
+    explain: 'Explain the following code concisely, focusing on what it does and why.',
+    refactor: 'Suggest a refactored version of this code. Show the improved version and explain why it\'s better.',
+    fix: 'Identify bugs or issues in this code and provide fixes.',
+    docs: 'Generate JSDoc-style documentation for this code.',
+  };
+
+  async function handleCodeAction(
+    code: string | undefined,
+    range: vscode.Range | undefined,
+    action: keyof typeof codeActionPrompts
+  ): Promise<void> {
+    if (!code) {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.selection.isEmpty) {
+        vscode.window.showInformationMessage('No code selected.');
+        return;
+      }
+      code = editor.document.getText(editor.selection);
+      range = new vscode.Range(editor.selection.start, editor.selection.end);
+    }
+
+    if (!server?.isRunning) {
+      const startAction = 'Start Server';
+      const result = await vscode.window.showErrorMessage(
+        'OpenCode server is not running.',
+        startAction
+      );
+      if (result === startAction) {
+        await startServer();
+      }
+      return;
+    }
+
+    try {
+      const result = await api.complete(code, codeActionPrompts[action]);
+
+      if (action === 'refactor' || action === 'fix') {
+        const label = action === 'refactor' ? 'Apply suggestion?' : 'Apply fix?';
+        const choice = await vscode.window.showQuickPick(
+          ['Apply', 'Preview Diff', 'Cancel'],
+          { placeHolder: label }
+        );
+
+        if (choice === 'Apply') {
+          const editor = vscode.window.activeTextEditor;
+          if (editor && range) {
+            await editor.edit((editBuilder) => {
+              editBuilder.replace(range!, result);
+            });
+          }
+        } else if (choice === 'Preview Diff') {
+          const editor = vscode.window.activeTextEditor;
+          if (editor) {
+            const suggestedDoc = await vscode.workspace.openTextDocument({
+              content: result,
+              language: editor.document.languageId,
+            });
+            await vscode.commands.executeCommand(
+              'vscode.diff',
+              editor.document.uri,
+              suggestedDoc.uri,
+              action === 'refactor' ? 'Refactored Version' : 'Fixed Version'
+            );
+          }
+        }
+      } else {
+        const decorationType = vscode.window.createTextEditorDecorationType({
+          backgroundColor: 'rgba(0, 122, 204, 0.1)',
+          overviewRulerColor: 'rgba(0, 122, 204, 0.3)',
+        });
+        context.subscriptions.push(decorationType);
+
+        const editor = vscode.window.activeTextEditor;
+        if (editor && range) {
+          editor.setDecorations(decorationType, [
+            {
+              range,
+              hoverMessage: new vscode.MarkdownString(result),
+            },
+          ]);
+
+          vscode.window.showInformationMessage(
+            action === 'explain'
+              ? 'Explanation ready \u2014 hover over the selection to see it.'
+              : 'Documentation generated \u2014 hover over the selection to see it.'
+          );
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      vscode.window.showErrorMessage(`OpenCode action failed: ${msg}`);
+    }
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.explainSelection', async (code?: string, range?: vscode.Range) => {
+      await handleCodeAction(code, range, 'explain');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.refactorSelection', async (code?: string, range?: vscode.Range) => {
+      await handleCodeAction(code, range, 'refactor');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.fixSelection', async (code?: string, range?: vscode.Range) => {
+      await handleCodeAction(code, range, 'fix');
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.docsSelection', async (code?: string, range?: vscode.Range) => {
+      await handleCodeAction(code, range, 'docs');
     })
   );
 
