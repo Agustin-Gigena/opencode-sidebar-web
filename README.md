@@ -19,6 +19,30 @@ Integrates the OpenCode web UI into a VS Code sidebar panel.
 - Command to install opencode binary from VS Code
 - "View Logs" and "Settings" links in the panel
 
+### Inline Code Actions
+
+Select code in the editor and trigger Explain, Refactor, Fix, or Docs actions:
+
+- **CodeLens**: Action buttons appear above your selection
+- **Context menu**: Right-click selected code → **OpenCode** → Explain / Refactor / Fix / Docs
+- **Commands**: Run from the Command Palette (`opencode-sidebar-web.explainSelection`, `refactorSelection`, `fixSelection`, `docsSelection`)
+
+Results are displayed inline:
+- **Explain** / **Docs** → Hover decoration over the selected range
+- **Refactor** / **Fix** → Quick pick with "Apply", "Preview Diff", or "Cancel"
+
+### Send to Chat
+
+Send selected code with file context to the OpenCode chat panel:
+
+- Right-click selected code → **Send to OpenCode**
+- Keyboard shortcut: `Ctrl+Shift+C` (`Cmd+Shift+C` on macOS)
+- Code context is sent to the server, and the file reference appears in the chat input
+
+### Auto-link Active File
+
+When you switch between open files, the active file path is automatically sent as context to the OpenCode session. The current file is displayed in the panel's status bar. This can be disabled via the `autoLinkActiveFile` setting.
+
 ## Usage
 
 - Click the OpenCode icon in the editor title bar
@@ -38,8 +62,9 @@ This extension contributes the following settings:
 - `opencode-sidebar-web.devcontainerMode`: Detect opencode running in devcontainer/remote automatically
 - `opencode-sidebar-web.autoInstallInDevcontainer`: Auto-install opencode on activation in devcontainer if not present
 - `opencode-sidebar-web.sidebarPosition`: Always secondary sidebar (right side)
+- `opencode-sidebar-web.autoLinkActiveFile`: Automatically send the active file path as context when switching editors (default: true)
 
 ## Requirements
 
-- VS Code 1.118.0 or higher
+- VS Code 1.106.0 or higher
 - The `opencode-ai` npm package (bundled)
