@@ -26,7 +26,8 @@
     "onCommand:opencode-sidebar-web.explainSelection",
     "onCommand:opencode-sidebar-web.refactorSelection",
     "onCommand:opencode-sidebar-web.fixSelection",
-    "onCommand:opencode-sidebar-web.docsSelection"
+    "onCommand:opencode-sidebar-web.docsSelection",
+    "onCommand:opencode-sidebar-web.sendToChat"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -104,6 +105,10 @@
       {
         "command": "opencode-sidebar-web.docsSelection",
         "title": "OpenCode: Generate Docs"
+      },
+      {
+        "command": "opencode-sidebar-web.sendToChat",
+        "title": "OpenCode: Send to Chat"
       }
     ],
     "submenus": [
@@ -147,6 +152,11 @@
           "submenu": "opencode-sidebar-web.codeActions",
           "group": "1_modification",
           "when": "editorHasSelection"
+        },
+        {
+          "command": "opencode-sidebar-web.sendToChat",
+          "group": "2_sendToChat",
+          "when": "editorHasSelection"
         }
       ],
       "opencode-sidebar-web.codeActions": [
@@ -173,6 +183,11 @@
         "command": "opencode-sidebar-web.openPanel",
         "key": "ctrl+shift+o",
         "mac": "cmd+shift+o"
+      },
+      {
+        "command": "opencode-sidebar-web.sendToChat",
+        "key": "ctrl+shift+c",
+        "mac": "cmd+shift+c"
       }
     ],
     "configuration": {

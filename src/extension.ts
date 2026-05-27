@@ -269,6 +269,42 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('opencode-sidebar-web.sendToChat', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.selection.isEmpty) {
+        vscode.window.showInformationMessage('No code selected.');
+        return;
+      }
+
+      const selection = editor.selection;
+      const code = editor.document.getText(selection);
+      const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+      const lines = `${selection.start.line + 1}-${selection.end.line + 1}`;
+      const language = editor.document.languageId;
+
+      if (!server?.isRunning) {
+        const startAction = 'Start Server';
+        const result = await vscode.window.showErrorMessage(
+          'OpenCode server is not running.',
+          startAction
+        );
+        if (result === startAction) {
+          await startServer();
+        }
+        return;
+      }
+
+      try {
+        await api.setContext({ filePath, lines, code });
+        panel?.postMessage({ type: 'addToChatInput', filePath, lines, code, language });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        vscode.window.showErrorMessage(`Failed to send to chat: ${msg}`);
+      }
+    })
+  );
+
   server.onDidChangeStatus((running) => {
     vscode.commands.executeCommand('setContext', 'opencodeSidebarServerRunning', running);
     if (running) {

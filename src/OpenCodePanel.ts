@@ -97,6 +97,10 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     this.render();
   }
 
+  postMessage(message: any): void {
+    this._view?.webview.postMessage(message);
+  }
+
   clearState(): void {
     this._isStarting = false;
     this._errorMessage = '';
@@ -287,6 +291,20 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
         );
       }
     }
+
+    window.addEventListener('message', (event) => {
+      const msg = event.data;
+      if (msg.type === 'addToChatInput') {
+        const iframe = document.getElementById('ocFrame');
+        if (iframe && iframe.contentWindow) {
+          const origin = iframe.src ? new URL(iframe.src).origin : '*';
+          iframe.contentWindow.postMessage(
+            { type: 'addToChatInput', filePath: msg.filePath, lines: msg.lines },
+            origin
+          );
+        }
+      }
+    });
 
     syncTheme();
     let frameLoaded = false;
