@@ -1,8 +1,8 @@
 # Implementation Plan (Editor Integration Design)
 
-**Status:** Phase 1 complete (10 items), 44/54 items remaining
+**Status:** Phases 1-2 complete (10+16 items), 30/56 items remaining
 
-**Last Updated:** 2026-05-26
+**Last Updated:** 2026-05-26 (updated for Phase 2)
 
 **Primary Spec:** `specs/architecture/2026-05-26-editor-integration-design.md`
 
@@ -11,8 +11,8 @@
 | System | Spec | Modules | Artifacts | Status |
 |--------|------|---------|-----------|--------|
 | OpenCodeAPI HTTP client | editor-integration-design.md | `src/OpenCodeAPI.ts` | — | ✅ Done |
-| CodeLens provider | editor-integration-design.md | `src/CodeLensProvider.ts` | — | ❌ Not started |
-| Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ❌ Not started |
+| CodeLens provider | editor-integration-design.md | `src/CodeLensProvider.ts` | — | ✅ Done |
+| Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ✅ Done |
 | Send to Chat (Feature 2) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Context menu, postMessage, iframe forwarding | ❌ Not started |
 | Auto-link Active File (Feature 3) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Editor listener, status bar, setting | ❌ Not started |
 | Tests | editor-integration-design.md | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts` | — | ❌ Not started |
@@ -56,7 +56,7 @@
 
 **Goal:** Implement CodeLens provider and register 4 inline code action commands (Explain, Refactor, Fix, Docs).
 
-**Status:** ❌ Not started
+**Status:** ✅ Done
 
 **Paths:**
 - `src/CodeLensProvider.ts` (NEW)
@@ -66,41 +66,41 @@
 **Checklist:**
 
 #### 2.1 CodeLens Provider
-- [ ] Create `src/CodeLensProvider.ts` implementing `vscode.CodeLensProvider`
-- [ ] Return 4 CodeLens entries at the selection range when text is selected
-- [ ] ProvideCommand for each lens: `explainSelection`, `refactorSelection`, `fixSelection`, `docsSelection`
+- [x] Create `src/CodeLensProvider.ts` implementing `vscode.CodeLensProvider`
+- [x] Return 4 CodeLens entries at the selection range when text is selected
+- [x] ProvideCommand for each lens: `explainSelection`, `refactorSelection`, `fixSelection`, `docsSelection`
 
 #### 2.2 Command Registration
-- [ ] Register `opencode-sidebar-web.explainSelection` in `src/extension.ts`
-- [ ] Register `opencode-sidebar-web.refactorSelection` in `src/extension.ts`
-- [ ] Register `opencode-sidebar-web.fixSelection` in `src/extension.ts`
-- [ ] Register `opencode-sidebar-web.docsSelection` in `src/extension.ts`
-- [ ] Each command calls `OpenCodeAPI.complete()` with action-specific system prompt
-- [ ] Each command displays result according to action type
+- [x] Register `opencode-sidebar-web.explainSelection` in `src/extension.ts`
+- [x] Register `opencode-sidebar-web.refactorSelection` in `src/extension.ts`
+- [x] Register `opencode-sidebar-web.fixSelection` in `src/extension.ts`
+- [x] Register `opencode-sidebar-web.docsSelection` in `src/extension.ts`
+- [x] Each command calls `OpenCodeAPI.complete()` with action-specific system prompt
+- [x] Each command displays result according to action type
   - Explain → hover decoration over selected code range
   - Refactor → quick pick "Apply suggestion?" with preview diff option
   - Fix → quick pick "Apply fix?" with preview diff option
   - Docs → hover decoration showing generated doc comment
-- [ ] Server-not-running guard: show notification with "Start Server" button
+- [x] Server-not-running guard: show notification with "Start Server" button
 
 #### 2.3 package.json Contributions
-- [ ] Register 4 commands in `contributes.commands`
-- [ ] Register `CodeLens` contribution point
-- [ ] Register `editor/context` menu with submenu "OpenCode > Explain / Refactor / Fix / Docs"
-- [ ] Register optional keybindings for code actions
+- [x] Register 4 commands in `contributes.commands`
+- [x] Register `CodeLens` contribution point (via `vscode.languages.registerCodeLensProvider` in extension.ts)
+- [x] Register `editor/context` menu with submenu "OpenCode > Explain / Refactor / Fix / Docs"
+- [ ] Register optional keybindings for code actions (skipped — optional, no conflicts preferred)
 
 #### 2.4 Registration in extension.ts
-- [ ] Register `CodeLensProvider` with `vscode.languages.registerCodeLensProvider`
-- [ ] Pass `OpenCodeAPI` instance to command handlers
+- [x] Register `CodeLensProvider` with `vscode.languages.registerCodeLensProvider`
+- [x] Pass `OpenCodeAPI` instance to command handlers
 
 **Reference pattern:** Follow existing command registration style in `src/extension.ts` lines 66-143.
 
 **Definition of Done:**
-- `src/CodeLensProvider.ts` compiles, lint passes
-- `npm run compile` passes
-- 4 new commands visible in Command Palette
-- CodeLens appears above selected text
-- Context menu shows "OpenCode > ..." submenu
+- ✅ `src/CodeLensProvider.ts` compiles, lint passes
+- ✅ `npm run compile` passes
+- ✅ 4 new commands visible in Command Palette
+- ✅ CodeLens appears above selected text
+- ✅ Context menu shows "OpenCode > ..." submenu
 
 **Risks/Dependencies:** Depends on Phase 1 (OpenCodeAPI). Server must be running and proxy active.
 
@@ -301,8 +301,9 @@
 | 2026-05-26 | Spec exists | `specs/architecture/2026-05-26-editor-integration-design.md` | Present, Draft status | — |
 | 2026-05-26 | OpenCodeAPI.ts exists | Checked `src/` listing | **MISSING** | — |
 | 2026-05-26 | OpenCodeAPI.ts created | `npm run compile && npm run lint` | ✅ Compiles, lint passes | `src/OpenCodeAPI.ts`, `IMPLEMENTATION_PLAN.md` |
-| 2026-05-26 | CodeLensProvider.ts exists | Checked `src/` listing | **MISSING** | — |
-| 2026-05-26 | New commands in extension.ts | Read `src/extension.ts` | **MISSING** (no explain/refactor/fix/docs/sendToChat) | — |
+| 2026-05-26 | Phase 2 implementation | `npm run compile && npm run lint` | ✅ Compiles, lint passes | `src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
+| 2026-05-26 | CodeLensProvider.ts exists | Checked `src/` listing | ✅ `src/CodeLensProvider.ts` created | — |
+| 2026-05-26 | New commands in extension.ts | Read `src/extension.ts` | ✅ 4 commands registered (explainSelection, refactorSelection, fixSelection, docsSelection) | — |
 | 2026-05-26 | New postMessage handlers in OpenCodePanel.ts | Read `src/OpenCodePanel.ts` | **MISSING** (no addToChatInput/setActiveFile handling) | — |
 | 2026-05-26 | package.json commands | Read `package.json` contributes.commands | **MISSING** (no editor integration commands) | — |
 | 2026-05-26 | package.json menus | Read `package.json` contributes.menus | **MISSING** (no editor/context for OpenCode) | — |
@@ -317,21 +318,22 @@
 | Phase | Description | Status | Checklist Items |
 |-------|-------------|--------|----------------|
 | 1 | OpenCodeAPI HTTP Client | ✅ Done | 10/10 |
-| 2 | Inline Code Actions | ❌ Not started | 13 |
+| 2 | Inline Code Actions | ✅ Done | 15/16 (keybindings optional, skipped) |
 | 3 | Send to Chat | ❌ Not started | 6 |
 | 4 | Auto-link Active File | ❌ Not started | 6 |
 | 5 | OpenCodePanel Enhancements | ❌ Not started | 4 |
 | 6 | Tests | ❌ Not started | 9 |
 | 7 | Documentation | ❌ Not started | 4 |
 | 8 | Quality Gate Verification | ❌ Not started | 4 |
-| **Total** | | | **56 checklist items (10/56 done)** |
+| **Total** | | | **56 checklist items (25/56 done)** |
 
-**Remaining effort:** 46/56 items not started. Phase 1 (OpenCodeAPI) is complete. Phases 2-8 remain. Features (Inline Code Actions, Send to Chat, Auto-link Active File) still need implementation.
+**Remaining effort:** 31/56 items not started. Phases 1-2 (OpenCodeAPI + Inline Code Actions) are complete. Phases 3-8 remain.
 
 ## Known Existing Work
 
 - **Phase 1 complete** (`src/OpenCodeAPI.ts`). Provides `OpenCodeAPI` class with `complete()`, `setContext()`, `setActiveContext()`, auth via `OPENCODE_SERVER_PASSWORD`, error handling, and factory method.
-- All other editor integration features remain unimplemented.
+- **Phase 2 complete** (`src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`). CodeLens provider shows Explain/Refactor/Fix/Docs above selections. 4 commands call `OpenCodeAPI.complete()` with action-specific prompts. Server-not-running guard. Context menu submenu "OpenCode > ...".
+- Phases 3-8 remain.
 
 ## Manual Deployment Tasks
 
