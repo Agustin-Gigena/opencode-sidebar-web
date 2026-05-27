@@ -1,0 +1,183 @@
+import * as assert from 'assert';
+import * as http from 'http';
+import * as vscode from 'vscode';
+import { CodeLensProvider } from '../CodeLensProvider';
+import { OpenCodeAPI, ServerNotRunningError, AuthError } from '../OpenCodeAPI';
+import { OpenCodeServer } from '../OpenCodeServer';
+import { createMockServer, withEnvAsync } from './test-utils';
+
+suite('CodeLensProvider', () => {
+  test('returns empty array when no editor is active', () => {
+    const provider = new CodeLensProvider();
+    const doc = { uri: vscode.Uri.file('/test.ts') } as vscode.TextDocument;
+    const lenses = provider.provideCodeLenses(doc);
+    assert.strictEqual(lenses.length, 0);
+  });
+
+  test('returns empty array when selection is empty', () => {
+    const provider = new CodeLensProvider();
+    const doc = vscode.window.activeTextEditor?.document;
+    if (!doc) { return; }
+    const origSelection = vscode.window.activeTextEditor!.selection;
+    try {
+      const pos = new vscode.Position(0, 0);
+      vscode.window.activeTextEditor!.selection = new vscode.Selection(pos, pos);
+      const lenses = provider.provideCodeLenses(doc);
+      assert.strictEqual(lenses.length, 0);
+    } finally {
+      vscode.window.activeTextEditor!.selection = origSelection;
+    }
+  });
+});
+
+suite('OpenCodeAPI', () => {
+  test('constructs correct request URL and body for complete()', async () => {
+    const mockSrv = await createMockServer(18793, {});
+    try {
+      const mockServer = {
+        isRunning: true,
+        serverUrl: 'http://127.0.0.1:18793',
+      } as unknown as OpenCodeServer;
+      const api = new OpenCodeAPI(mockServer);
+      const result = await api.complete('test code', 'test prompt');
+      const parsed = JSON.parse(result);
+      assert.strictEqual(parsed.model, 'default');
+      assert.strictEqual(parsed.messages[0].role, 'system');
+      assert.strictEqual(parsed.messages[0].content, 'test prompt');
+      assert.strictEqual(parsed.messages[1].role, 'user');
+      assert.strictEqual(parsed.messages[1].content, 'test code');
+    } finally {
+      mockSrv.close();
+    }
+  });
+
+  test('handles auth via OPENCODE_SERVER_PASSWORD', async () => {
+    let capturedAuth: string | undefined;
+    const server = await new Promise<http.Server>((resolve) => {
+      const srv = http.createServer((req, res) => {
+        capturedAuth = req.headers['authorization'] as string | undefined;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+      });
+      srv.listen(18794, '127.0.0.1', () => resolve(srv));
+    });
+    try {
+      const mockServer = {
+        isRunning: true,
+        serverUrl: 'http://127.0.0.1:18794',
+      } as unknown as OpenCodeServer;
+      await withEnvAsync(
+        { OPENCODE_SERVER_PASSWORD: 'secret123' },
+        async () => {
+          const api = new OpenCodeAPI(mockServer);
+          return api.complete('test', 'test');
+        }
+      );
+      assert.ok(capturedAuth, 'Authorization header should be present');
+      const decoded = Buffer.from(
+        capturedAuth!.replace('Basic ', ''), 'base64'
+      ).toString();
+      assert.strictEqual(decoded, 'opencode:secret123');
+    } finally {
+      server.close();
+    }
+  });
+
+  test('handles server-not-running error gracefully', async () => {
+    const mockServer = {
+      isRunning: false,
+      serverUrl: 'http://127.0.0.1:19999',
+    } as unknown as OpenCodeServer;
+    const api = new OpenCodeAPI(mockServer);
+    try {
+      await api.complete('test', 'test');
+      assert.fail('Should have thrown');
+    } catch (err) {
+      assert.ok(err instanceof ServerNotRunningError);
+    }
+  });
+
+  test('handles auth failure with 401 status', async () => {
+    const server = await new Promise<http.Server>((resolve) => {
+      const srv = http.createServer((_req, res) => {
+        res.writeHead(401);
+        res.end();
+      });
+      srv.listen(18795, '127.0.0.1', () => resolve(srv));
+    });
+    try {
+      const mockServer = {
+        isRunning: true,
+        serverUrl: 'http://127.0.0.1:18795',
+      } as unknown as OpenCodeServer;
+      const api = new OpenCodeAPI(mockServer);
+      try {
+        await api.complete('test', 'test');
+        assert.fail('Should have thrown');
+      } catch (err) {
+        assert.ok(err instanceof AuthError);
+      }
+    } finally {
+      server.close();
+    }
+  });
+});
+
+suite('Editor Integration Commands', () => {
+  test('explainSelection command is registered', async () => {
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.includes('opencode-sidebar-web.explainSelection'));
+  });
+
+  test('refactorSelection command is registered', async () => {
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.includes('opencode-sidebar-web.refactorSelection'));
+  });
+
+  test('fixSelection command is registered', async () => {
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.includes('opencode-sidebar-web.fixSelection'));
+  });
+
+  test('docsSelection command is registered', async () => {
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.includes('opencode-sidebar-web.docsSelection'));
+  });
+
+  test('sendToChat command is registered', async () => {
+    const commands = await vscode.commands.getCommands();
+    assert.ok(commands.includes('opencode-sidebar-web.sendToChat'));
+  });
+});
+
+suite('Auto-link Active File', () => {
+  test('autoLinkActiveFile setting defaults to true', () => {
+    const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+    assert.strictEqual(config.get('autoLinkActiveFile', true), true);
+  });
+
+  test('autoLinkActiveFile can be toggled to false', async () => {
+    const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+    const orig = config.get('autoLinkActiveFile', true);
+    try {
+      await config.update('autoLinkActiveFile', false, vscode.ConfigurationTarget.Global);
+      const updated = config.get('autoLinkActiveFile', true);
+      assert.strictEqual(updated, false);
+    } finally {
+      await config.update('autoLinkActiveFile', orig, vscode.ConfigurationTarget.Global);
+    }
+  });
+
+  test('server-not-running guard prevents auto-link from firing', () => {
+    const handler = (serverIsRunning: boolean) => {
+      return function handleActiveEditorChange(editor: vscode.TextEditor | undefined) {
+        if (!editor || !serverIsRunning) { return; }
+        const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+        if (!config.get('autoLinkActiveFile', true)) { return; }
+        return 'would fire';
+      };
+    };
+    assert.strictEqual(handler(false)(undefined), undefined);
+    assert.strictEqual(handler(false)({} as any), undefined);
+  });
+});

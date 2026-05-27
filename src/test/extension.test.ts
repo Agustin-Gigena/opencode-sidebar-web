@@ -18,6 +18,13 @@ suite('Extension Test Suite', () => {
     assert.ok(commands.includes('opencode-sidebar-web.stopServer'));
     assert.ok(commands.includes('opencode-sidebar-web.restartServer'));
     assert.ok(commands.includes('opencode-sidebar-web.openFile'));
+    assert.ok(commands.includes('opencode-sidebar-web.focusPanel'));
+    assert.ok(commands.includes('opencode-sidebar-web.installBinary'));
+    assert.ok(commands.includes('opencode-sidebar-web.explainSelection'));
+    assert.ok(commands.includes('opencode-sidebar-web.refactorSelection'));
+    assert.ok(commands.includes('opencode-sidebar-web.fixSelection'));
+    assert.ok(commands.includes('opencode-sidebar-web.docsSelection'));
+    assert.ok(commands.includes('opencode-sidebar-web.sendToChat'));
   });
 });
 
