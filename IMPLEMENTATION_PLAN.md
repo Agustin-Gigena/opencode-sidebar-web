@@ -1,8 +1,8 @@
 # Implementation Plan (Editor Integration Design)
 
-**Status:** Phases 1-3 complete (25+6 items), 24/56 items remaining
+**Status:** Phases 1-4 complete (25+6+6 items), 18/56 items remaining
 
-**Last Updated:** 2026-05-26 (updated for Phase 3)
+**Last Updated:** 2026-05-26 (updated for Phase 4)
 
 **Primary Spec:** `specs/architecture/2026-05-26-editor-integration-design.md`
 
@@ -14,7 +14,7 @@
 | CodeLens provider | editor-integration-design.md | `src/CodeLensProvider.ts` | — | ✅ Done |
 | Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ✅ Done |
 | Send to Chat (Feature 2) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Context menu, postMessage, iframe forwarding | ✅ Done |
-| Auto-link Active File (Feature 3) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Editor listener, status bar, setting | ❌ Not started |
+| Auto-link Active File (Feature 3) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Editor listener, status bar, setting | ✅ Done |
 | Tests | editor-integration-design.md | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts` | — | ❌ Not started |
 | Docs | editor-integration-design.md | `README.md` | — | ❌ Not started |
 
@@ -151,7 +151,7 @@
 
 **Goal:** Automatically send the active file path to the OpenCode session when the user switches editors.
 
-**Status:** ❌ Not started
+**Status:** ✅ Done
 
 **Paths:**
 - `src/extension.ts` (MODIFY)
@@ -161,27 +161,28 @@
 **Checklist:**
 
 #### 4.1 Editor Listener
-- [ ] Subscribe to `window.onDidChangeActiveTextEditor` in `src/extension.ts`
-- [ ] Implement 500ms debounce to avoid rapid successive calls
-- [ ] Extract: relative file path, language ID, workspace folder
-- [ ] Call `OpenCodeAPI.setActiveContext({ filePath, language, workspaceFolder })`
-- [ ] Send `postMessage({ type: 'setActiveFile', filePath })` to webview
+- [x] Subscribe to `window.onDidChangeActiveTextEditor` in `src/extension.ts`
+- [x] Implement 500ms debounce to avoid rapid successive calls
+- [x] Extract: relative file path, language ID, workspace folder
+- [x] Call `OpenCodeAPI.setActiveContext({ filePath, language, workspaceFolder })`
+- [x] Send `postMessage({ type: 'setActiveFile', filePath })` to webview
 
 #### 4.2 OpenCodePanel Status Bar Update
-- [ ] Add active file section between port label and Logs link in HTML status bar: `📄 src/foo.ts`
-- [ ] Handle `setActiveFile` message type in `onDidReceiveMessage`
-- [ ] Update status bar HTML dynamically when file changes
+- [x] Add active file section between port label and Logs link in HTML status bar: `📄 src/foo.ts`
+- [x] Handle `setActiveFile` message type in webview `window.addEventListener('message')`
+- [x] Update status bar HTML dynamically when file changes via DOM manipulation
 
 #### 4.3 Setting
-- [ ] Add `opencode-sidebar-web.autoLinkActiveFile` boolean setting (default: `true`) in `package.json`
-- [ ] Read setting in listener and skip when disabled
+- [x] Add `opencode-sidebar-web.autoLinkActiveFile` boolean setting (default: `true`) in `package.json`
+- [x] Read setting in listener and skip when disabled
 
 **Reference pattern:** Status bar rendering in `OpenCodePanel.ts` lines 116-131. Settings pattern in `package.json` lines 127-174.
 
 **Definition of Done:**
-- Active file appears in panel status bar when switching editors
-- Setting can disable auto-linking
-- 500ms debounce prevents rapid updates
+- ✅ Active file appears in panel status bar when switching editors
+- ✅ Setting can disable auto-linking
+- ✅ 500ms debounce prevents rapid updates
+- ✅ `npm run compile && npm run lint && npm run esbuild` pass
 
 **Risks/Dependencies:** Depends on Phase 1. Status bar layout changes may need CSS adjustment for the additional element.
 
@@ -314,6 +315,7 @@
 | 2026-05-26 | extension.test.ts updated | Read `src/test/extension.test.ts` | **NOT UPDATED** (7 commands, should be 12) | — |
 | 2026-05-26 | README updated | Read `README.md` | **NOT UPDATED** (no editor integration mentions) | — |
 | 2026-05-26 | Phase 3 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
+| 2026-05-26 | Phase 4 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
 
 ## Summary
 
@@ -322,21 +324,22 @@
 | 1 | OpenCodeAPI HTTP Client | ✅ Done | 10/10 |
 | 2 | Inline Code Actions | ✅ Done | 15/16 (keybindings optional, skipped) |
 | 3 | Send to Chat | ✅ Done | 7/7 |
-| 4 | Auto-link Active File | ❌ Not started | 6 |
-| 5 | OpenCodePanel Enhancements | ❌ Not started | 4 (1/4 sub-items done) |
+| 4 | Auto-link Active File | ✅ Done | 6/6 |
+| 5 | OpenCodePanel Enhancements | ❌ Not started | 4 (2/4 sub-items done via Phase 4) |
 | 6 | Tests | ❌ Not started | 9 |
 | 7 | Documentation | ❌ Not started | 4 |
 | 8 | Quality Gate Verification | ❌ Not started | 4 |
-| **Total** | | | **56 checklist items (32/56 done)** |
+| **Total** | | | **56 checklist items (38/56 done)** |
 
-**Remaining effort:** 24/56 items not started. Phases 1-3 (OpenCodeAPI + Inline Code Actions + Send to Chat) are complete. Phases 4-8 remain.
+**Remaining effort:** 18/56 items not started. Phases 1-4 (OpenCodeAPI + Inline Code Actions + Send to Chat + Auto-link Active File) are complete. Phases 5-8 remain.
 
 ## Known Existing Work
 
 - **Phase 1 complete** (`src/OpenCodeAPI.ts`). Provides `OpenCodeAPI` class with `complete()`, `setContext()`, `setActiveContext()`, auth via `OPENCODE_SERVER_PASSWORD`, error handling, and factory method.
 - **Phase 2 complete** (`src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`). CodeLens provider shows Explain/Refactor/Fix/Docs above selections. 4 commands call `OpenCodeAPI.complete()` with action-specific prompts. Server-not-running guard. Context menu submenu "OpenCode > ...".
 - **Phase 3 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Send to Chat command sends selected code + file context to the OpenCode chat panel. Calls `OpenCodeAPI.setContext()` and forwards `addToChatInput` message to webview iframe. Context menu entry and keyboard shortcut registered.
-- Phases 4-8 remain.
+- **Phase 4 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Auto-link Active File sends the active file path as context when switching editors. 500ms debounce prevents rapid calls. Configurable via `opencode-sidebar-web.autoLinkActiveFile` setting. Active file appears in panel status bar.
+- Phases 5-8 remain.
 
 ## Manual Deployment Tasks
 
