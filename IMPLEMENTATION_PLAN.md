@@ -2,7 +2,7 @@
 
 **Status:** Phases 1-4 complete (25+6+6 items), 18/56 items remaining
 
-**Last Updated:** 2026-05-26 (updated for Phase 4)
+**Last Updated:** 2026-05-26 (updated for Phase 6)
 
 **Primary Spec:** `specs/architecture/2026-05-26-editor-integration-design.md`
 
@@ -15,7 +15,7 @@
 | Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ✅ Done |
 | Send to Chat (Feature 2) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Context menu, postMessage, iframe forwarding | ✅ Done |
 | Auto-link Active File (Feature 3) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Editor listener, status bar, setting | ✅ Done |
-| Tests | editor-integration-design.md | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts` | — | ❌ Not started |
+| Tests | editor-integration-design.md | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts` | — | ✅ Done |
 | Docs | editor-integration-design.md | `README.md` | — | ❌ Not started |
 
 ## Phased Plan
@@ -228,18 +228,18 @@
 **Checklist:**
 
 #### 6.1 editor-integration.test.ts
-- [ ] CodeLensProvider: returns lenses only when text is selected
-- [ ] CodeLensProvider: returns empty array when no selection
-- [ ] OpenCodeAPI: constructs correct request URL and body for `complete()`
-- [ ] OpenCodeAPI: handles auth via `OPENCODE_SERVER_PASSWORD`
-- [ ] OpenCodeAPI: handles server-not-running error gracefully
-- [ ] Commands: all 4 code action commands are registered
-- [ ] Commands: `sendToChat` is registered
-- [ ] Auto-link: 500ms debounce fires correctly (timing test)
-- [ ] Auto-link: setting `autoLinkActiveFile: false` prevents listener from firing
+- [x] CodeLensProvider: returns lenses only when text is selected
+- [x] CodeLensProvider: returns empty array when no selection
+- [x] OpenCodeAPI: constructs correct request URL and body for `complete()`
+- [x] OpenCodeAPI: handles auth via `OPENCODE_SERVER_PASSWORD`
+- [x] OpenCodeAPI: handles server-not-running error gracefully
+- [x] Commands: all 4 code action commands are registered
+- [x] Commands: `sendToChat` is registered
+- [x] Auto-link: 500ms debounce fires correctly (timing test)
+- [x] Auto-link: setting `autoLinkActiveFile: false` prevents listener from firing
 
 #### 6.2 extension.test.ts Update
-- [ ] Add new command registrations to existing "Commands are registered" test
+- [x] Add new command registrations to existing "Commands are registered" test
   - `opencode-sidebar-web.explainSelection`
   - `opencode-sidebar-web.refactorSelection`
   - `opencode-sidebar-web.fixSelection`
@@ -316,6 +316,7 @@
 | 2026-05-26 | README updated | Read `README.md` | **NOT UPDATED** (no editor integration mentions) | — |
 | 2026-05-26 | Phase 3 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
 | 2026-05-26 | Phase 4 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
+| 2026-05-26 | Phase 6 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts`, `IMPLEMENTATION_PLAN.md` |
 
 ## Summary
 
@@ -326,12 +327,12 @@
 | 3 | Send to Chat | ✅ Done | 7/7 |
 | 4 | Auto-link Active File | ✅ Done | 6/6 |
 | 5 | OpenCodePanel Enhancements | ❌ Not started | 4 (2/4 sub-items done via Phase 4) |
-| 6 | Tests | ❌ Not started | 9 |
+| 6 | Tests | ✅ Done | 10/10 |
 | 7 | Documentation | ❌ Not started | 4 |
 | 8 | Quality Gate Verification | ❌ Not started | 4 |
-| **Total** | | | **56 checklist items (38/56 done)** |
+| **Total** | | | **56 checklist items (48/56 done)** |
 
-**Remaining effort:** 18/56 items not started. Phases 1-4 (OpenCodeAPI + Inline Code Actions + Send to Chat + Auto-link Active File) are complete. Phases 5-8 remain.
+**Remaining effort:** 8/56 items not started. Phases 1-4 and Phase 6 (Tests) are complete. Phases 5, 7, 8 remain.
 
 ## Known Existing Work
 
@@ -339,7 +340,8 @@
 - **Phase 2 complete** (`src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`). CodeLens provider shows Explain/Refactor/Fix/Docs above selections. 4 commands call `OpenCodeAPI.complete()` with action-specific prompts. Server-not-running guard. Context menu submenu "OpenCode > ...".
 - **Phase 3 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Send to Chat command sends selected code + file context to the OpenCode chat panel. Calls `OpenCodeAPI.setContext()` and forwards `addToChatInput` message to webview iframe. Context menu entry and keyboard shortcut registered.
 - **Phase 4 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Auto-link Active File sends the active file path as context when switching editors. 500ms debounce prevents rapid calls. Configurable via `opencode-sidebar-web.autoLinkActiveFile` setting. Active file appears in panel status bar.
-- Phases 5-8 remain.
+- **Phase 6 complete** (`src/test/editor-integration.test.ts`, `src/test/extension.test.ts`). Test file covers CodeLensProvider, OpenCodeAPI (request construction, auth, error handling), command registration, and auto-link behavior. Extension test updated to verify 13 commands.
+- Phases 5, 7, 8 remain.
 
 ## Manual Deployment Tasks
 
