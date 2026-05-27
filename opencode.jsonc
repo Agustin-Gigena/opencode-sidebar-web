@@ -15,6 +15,22 @@
           "logs/*": "deny"
         }
       }
+    },
+    "plan": {
+      "description": "Plan writer agent for Ralph Loops — generates/updates IMPLEMENTATION_PLAN.md",
+      "mode": "primary",
+      "reasoningEffort": "high",
+      "tools": {
+        "web-search_*": false
+      },
+      "permission": {
+        "edit": {
+          "opencode.jsonc": "deny",
+          "ralph.toml": "deny",
+          "ralph-local.toml": "deny",
+          "logs/*": "deny"
+        }
+      }
     }
   },
   "permission": {
