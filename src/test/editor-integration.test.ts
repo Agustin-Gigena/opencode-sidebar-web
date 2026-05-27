@@ -32,7 +32,30 @@ suite('CodeLensProvider', () => {
 
 suite('OpenCodeAPI', () => {
   test('constructs correct request URL and body for complete()', async () => {
-    const mockSrv = await createMockServer(18793, { 'Content-Type': 'application/json' });
+    let requestCount = 0;
+    const server = await new Promise<http.Server>((resolve) => {
+      const srv = http.createServer((req, res) => {
+        requestCount++;
+        if (requestCount === 1) {
+          assert.ok(req.url === '/session', 'First request should be to /session');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ id: 'test-session-id' }));
+        } else {
+          assert.ok(req.url?.startsWith('/session/'), 'Second request should be to /session/:id/message');
+          const body: Buffer[] = [];
+          req.on('data', (c) => body.push(c));
+          req.on('end', () => {
+            const parsed = JSON.parse(Buffer.concat(body).toString());
+            assert.strictEqual(parsed.parts[0].type, 'text');
+            assert.strictEqual(parsed.parts[0].text, 'test code');
+            assert.strictEqual(parsed.system, 'test prompt');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ parts: [{ type: 'text', text: parsed.parts[0].text }] }));
+          });
+        }
+      });
+      srv.listen(18793, '127.0.0.1', () => resolve(srv));
+    });
     try {
       const mockServer = {
         isRunning: true,
@@ -40,24 +63,25 @@ suite('OpenCodeAPI', () => {
       } as unknown as OpenCodeServer;
       const api = new OpenCodeAPI(mockServer);
       const result = await api.complete('test code', 'test prompt');
-      const parsed = JSON.parse(result);
-      assert.strictEqual(parsed.model, 'default');
-      assert.strictEqual(parsed.messages[0].role, 'system');
-      assert.strictEqual(parsed.messages[0].content, 'test prompt');
-      assert.strictEqual(parsed.messages[1].role, 'user');
-      assert.strictEqual(parsed.messages[1].content, 'test code');
+      assert.strictEqual(result, 'test code');
+      assert.strictEqual(requestCount, 2, 'Should make 2 requests (session + message)');
     } finally {
-      mockSrv.close();
+      server.close();
     }
   });
 
   test('handles auth via OPENCODE_SERVER_PASSWORD', async () => {
-    let capturedAuth: string | undefined;
+    const capturedAuths: string[] = [];
     const server = await new Promise<http.Server>((resolve) => {
       const srv = http.createServer((req, res) => {
-        capturedAuth = req.headers['authorization'] as string | undefined;
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+        capturedAuths.push(req.headers['authorization'] as string || '');
+        if (req.url === '/session') {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ id: 'test-session-id' }));
+        } else {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ parts: [{ type: 'text', text: 'ok' }] }));
+        }
       });
       srv.listen(18794, '127.0.0.1', () => resolve(srv));
     });
@@ -73,9 +97,9 @@ suite('OpenCodeAPI', () => {
           return api.complete('test', 'test');
         }
       );
-      assert.ok(capturedAuth, 'Authorization header should be present');
+      assert.ok(capturedAuths.length > 0, 'Auth header should be present on at least one request');
       const decoded = Buffer.from(
-        capturedAuth!.replace('Basic ', ''), 'base64'
+        capturedAuths[0].replace('Basic ', ''), 'base64'
       ).toString();
       assert.strictEqual(decoded, 'opencode:secret123');
     } finally {

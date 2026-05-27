@@ -16,6 +16,7 @@ export class AuthError extends Error {
 
 export class OpenCodeAPI {
   private _password: string | undefined;
+  private _sessionId: string | undefined;
 
   constructor(private _server: OpenCodeServer) {
     this._password = process.env.OPENCODE_SERVER_PASSWORD;
@@ -23,6 +24,23 @@ export class OpenCodeAPI {
 
   private get baseUrl(): string {
     return this._server.serverUrl;
+  }
+
+  private async ensureSession(): Promise<string> {
+    if (this._sessionId) { return this._sessionId; }
+
+    this.assertServerRunning();
+
+    const response = await fetch(`${this.baseUrl}/session`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ title: 'OpenCode Sidebar' }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const data: any = await this.handleResponse(response, 'session.create');
+    this._sessionId = data.id as string;
+    return this._sessionId;
   }
 
   private getHeaders(): Record<string, string> {
@@ -73,17 +91,14 @@ export class OpenCodeAPI {
   }
 
   async complete(code: string, systemPrompt: string): Promise<string> {
-    this.assertServerRunning();
+    const sessionId = await this.ensureSession();
 
-    const response = await fetch(`${this.baseUrl}/zen/v1/chat/completions`, {
+    const response = await fetch(`${this.baseUrl}/session/${sessionId}/message`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
-        model: 'default',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: code },
-        ],
+        parts: [{ type: 'text', text: code }],
+        system: systemPrompt,
       }),
       signal: AbortSignal.timeout(30000),
     }).catch((err) => {
@@ -96,7 +111,7 @@ export class OpenCodeAPI {
     });
 
     const data = await this.handleResponse(response, 'complete');
-    return data.choices?.[0]?.message?.content || '';
+    return data.parts?.map((p: { text?: string }) => p.text).filter(Boolean).join('\n') || '';
   }
 
   static fromServer(server: OpenCodeServer): OpenCodeAPI {
