@@ -1,8 +1,8 @@
 # Implementation Plan (Editor Integration Design)
 
-**Status:** Phases 1-2 complete (10+16 items), 30/56 items remaining
+**Status:** Phases 1-3 complete (25+6 items), 24/56 items remaining
 
-**Last Updated:** 2026-05-26 (updated for Phase 2)
+**Last Updated:** 2026-05-26 (updated for Phase 3)
 
 **Primary Spec:** `specs/architecture/2026-05-26-editor-integration-design.md`
 
@@ -13,7 +13,7 @@
 | OpenCodeAPI HTTP client | editor-integration-design.md | `src/OpenCodeAPI.ts` | — | ✅ Done |
 | CodeLens provider | editor-integration-design.md | `src/CodeLensProvider.ts` | — | ✅ Done |
 | Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ✅ Done |
-| Send to Chat (Feature 2) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Context menu, postMessage, iframe forwarding | ❌ Not started |
+| Send to Chat (Feature 2) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Context menu, postMessage, iframe forwarding | ✅ Done |
 | Auto-link Active File (Feature 3) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Editor listener, status bar, setting | ❌ Not started |
 | Tests | editor-integration-design.md | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts` | — | ❌ Not started |
 | Docs | editor-integration-design.md | `README.md` | — | ❌ Not started |
@@ -110,7 +110,7 @@
 
 **Goal:** Allow users to send selected code + file context to the OpenCode chat panel.
 
-**Status:** ❌ Not started
+**Status:** ✅ Done
 
 **Paths:**
 - `src/extension.ts` (MODIFY)
@@ -120,29 +120,30 @@
 **Checklist:**
 
 #### 3.1 Context Menu + Command
-- [ ] Register `opencode-sidebar-web.sendToChat` command
-- [ ] Add `editor/context` menu entry "Send to OpenCode" in `package.json`
-- [ ] Register command handler in `src/extension.ts` that:
+- [x] Register `opencode-sidebar-web.sendToChat` command
+- [x] Add `editor/context` menu entry "Send to OpenCode" in `package.json`
+- [x] Register command handler in `src/extension.ts` that:
   - Extracts relative file path, selected line range, and code content from active editor
   - Calls `OpenCodeAPI.setContext({ filePath, lines, code })`
   - Sends `postMessage({ type: 'addToChatInput', filePath, lines })` to webview
 
 #### 3.2 OpenCodePanel Message Handling
-- [ ] Add handler for `addToChatInput` message type in `onDidReceiveMessage`
-- [ ] Post message to iframe via `iframe.contentWindow.postMessage()`
-- [ ] Origin handling: use current iframe src origin
+- [x] Add `window.addEventListener('message')` in HTML script to intercept `addToChatInput` from extension
+- [x] Post message to iframe via `iframe.contentWindow.postMessage()`
+- [x] Origin handling: use current iframe src origin
 
 #### 3.3 Keyboard Shortcut
-- [ ] Register configurable keybinding in `package.json`
+- [x] Register configurable keybinding in `package.json` (`ctrl+shift+c` / `cmd+shift+c`)
 
 **Reference pattern:** Message handling in `OpenCodePanel.ts` lines 31-48 for `onDidReceiveMessage`.
 
 **Definition of Done:**
-- "Send to OpenCode" appears in right-click context menu on selected text
-- Message reaches webview iframe
-- Server-not-running guard works
+- ✅ "Send to OpenCode" appears in right-click context menu on selected text
+- ✅ Message reaches webview iframe via `window.addEventListener('message')` → `iframe.contentWindow.postMessage()`
+- ✅ Server-not-running guard works (shows notification with "Start Server" button)
+- ✅ `npm run compile && npm run lint && npm run esbuild` pass
 
-**Risks/Dependencies:** Depends on Phase 1. The `addToChatInput` iframe message protocol must be compatible with OpenCode web UI expectations (may need adjustment).
+**Risks/Dependencies:** Depends on Phase 1 (OpenCodeAPI). The `addToChatInput` iframe message protocol must be compatible with OpenCode web UI expectations (may need adjustment).
 
 ---
 
@@ -196,7 +197,7 @@
 - `src/OpenCodePanel.ts` (MODIFY)
 
 **Checklist:**
-- [ ] Add message handler for `addToChatInput` → forward to iframe via `postMessage`
+- [x] Add message handler for `addToChatInput` → forward to iframe via `postMessage`
 - [ ] Add message handler for `setActiveFile` → update status bar
 - [ ] Add message handler for code action results (if any panel-side rendering needed)
 - [ ] Add active file element in status bar HTML
@@ -312,6 +313,7 @@
 | 2026-05-26 | editor-integration.test.ts | Checked `src/test/` listing | **MISSING** | — |
 | 2026-05-26 | extension.test.ts updated | Read `src/test/extension.test.ts` | **NOT UPDATED** (7 commands, should be 12) | — |
 | 2026-05-26 | README updated | Read `README.md` | **NOT UPDATED** (no editor integration mentions) | — |
+| 2026-05-26 | Phase 3 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
 
 ## Summary
 
@@ -319,21 +321,22 @@
 |-------|-------------|--------|----------------|
 | 1 | OpenCodeAPI HTTP Client | ✅ Done | 10/10 |
 | 2 | Inline Code Actions | ✅ Done | 15/16 (keybindings optional, skipped) |
-| 3 | Send to Chat | ❌ Not started | 6 |
+| 3 | Send to Chat | ✅ Done | 7/7 |
 | 4 | Auto-link Active File | ❌ Not started | 6 |
-| 5 | OpenCodePanel Enhancements | ❌ Not started | 4 |
+| 5 | OpenCodePanel Enhancements | ❌ Not started | 4 (1/4 sub-items done) |
 | 6 | Tests | ❌ Not started | 9 |
 | 7 | Documentation | ❌ Not started | 4 |
 | 8 | Quality Gate Verification | ❌ Not started | 4 |
-| **Total** | | | **56 checklist items (25/56 done)** |
+| **Total** | | | **56 checklist items (32/56 done)** |
 
-**Remaining effort:** 31/56 items not started. Phases 1-2 (OpenCodeAPI + Inline Code Actions) are complete. Phases 3-8 remain.
+**Remaining effort:** 24/56 items not started. Phases 1-3 (OpenCodeAPI + Inline Code Actions + Send to Chat) are complete. Phases 4-8 remain.
 
 ## Known Existing Work
 
 - **Phase 1 complete** (`src/OpenCodeAPI.ts`). Provides `OpenCodeAPI` class with `complete()`, `setContext()`, `setActiveContext()`, auth via `OPENCODE_SERVER_PASSWORD`, error handling, and factory method.
 - **Phase 2 complete** (`src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`). CodeLens provider shows Explain/Refactor/Fix/Docs above selections. 4 commands call `OpenCodeAPI.complete()` with action-specific prompts. Server-not-running guard. Context menu submenu "OpenCode > ...".
-- Phases 3-8 remain.
+- **Phase 3 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Send to Chat command sends selected code + file context to the OpenCode chat panel. Calls `OpenCodeAPI.setContext()` and forwards `addToChatInput` message to webview iframe. Context menu entry and keyboard shortcut registered.
+- Phases 4-8 remain.
 
 ## Manual Deployment Tasks
 
