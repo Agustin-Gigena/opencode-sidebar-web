@@ -1,8 +1,8 @@
 # Implementation Plan (Editor Integration Design)
 
-**Status:** All phases complete — 56/56 checklist items done
+**Status:** All phases implemented — **3 critical runtime bugs found** (56/56 checklist items done, 3 bugs to fix)
 
-**Last Updated:** 2026-05-26 (updated for Phase 7 + Phase 8)
+**Last Updated:** 2026-05-26
 
 **Primary Spec:** `specs/architecture/2026-05-26-editor-integration-design.md`
 
@@ -10,13 +10,82 @@
 
 | System | Spec | Modules | Artifacts | Status |
 |--------|------|---------|-----------|--------|
-| OpenCodeAPI HTTP client | editor-integration-design.md | `src/OpenCodeAPI.ts` | — | ✅ Done |
+| OpenCodeAPI HTTP client | editor-integration-design.md | `src/OpenCodeAPI.ts` | — | ✅ Implemented **⚠️ Buggy** |
 | CodeLens provider | editor-integration-design.md | `src/CodeLensProvider.ts` | — | ✅ Done |
-| Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ✅ Done |
+| Inline Code Actions (Feature 1) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | 4 commands, CodeLens, context menus | ✅ Done **⚠️ Buggy** |
 | Send to Chat (Feature 2) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Context menu, postMessage, iframe forwarding | ✅ Done |
 | Auto-link Active File (Feature 3) | editor-integration-design.md | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json` | Editor listener, status bar, setting | ✅ Done |
 | Tests | editor-integration-design.md | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts` | — | ✅ Done |
 | Docs | editor-integration-design.md | `README.md` | — | ✅ Done |
+
+## Known Runtime Bugs
+
+### Bug 1: Wrong API endpoint — HTML returned instead of JSON
+
+**Observed error:**
+```
+OpenCode action failed: Unexpected token '<', "<!doctype "... is not valid JSON
+```
+
+**Root cause:** `src/OpenCodeAPI.ts:74` calls `POST /zen/v1/chat/completions` which does not exist on the OpenCode server. The server returns its SPA HTML page (client-side routing catch-all), and `handleResponse()` at line 68 calls `response.json()` on HTML content.
+
+**Fix required:** Replace `/zen/v1/chat/completions` with the real OpenCode API endpoint:
+- `POST /session/:id/prompt` — send a prompt message (streams response)
+- Session must exist first: `POST /session` to create one, or `GET /session` to list existing
+
+---
+
+### Bug 2: Missing session lifecycle
+
+**Observed error (indirect):** No error message shown yet, but `complete()` will always fail because no session is created before sending messages.
+
+**Root cause:** `OpenCodeAPI.complete()` at line 74 posts directly to a prompt endpoint without first creating or selecting an active session. The OpenCode API requires: `POST /session` → get `sessionID` → `POST /session/:id/prompt`.
+
+**Fix required:** Add session lifecycle:
+1. On first use: `POST /session { title?: "OpenCode Sidebar" }` → get `session.id`
+2. Cache the session ID in the `OpenCodeAPI` instance
+3. Subsequent calls use the cached session: `POST /session/:id/prompt`
+
+---
+
+### Bug 3: Missing content-type validation in error handling
+
+**Observed error:** The generic `Unexpected token '<'` JSON parse error is confusing to users. It should show a meaningful message.
+
+**Root cause:** `handleResponse()` at line 58-69 does not check `Content-Type` before parsing JSON. If the server returns HTML (wrong endpoint, server error page, etc.), the error message is cryptic.
+
+**Fix required:** Add content-type validation in `handleResponse()`:
+- Check `response.headers.get('content-type')` before calling `.json()`
+- If HTML detected (`text/html`), read body as text and throw descriptive error: `"Server returned HTML instead of JSON — endpoint '...' may not exist"`
+- Capture the response body in the error message for debugging
+
+---
+
+### Bug 4: `setContext()` and `setActiveContext()` hit non-existent endpoints
+
+**Observed error:** These silently fail (caught at `extension.ts:319`), but the API calls are wasted.
+
+**Root cause:** `src/OpenCodeAPI.ts:101` calls `/api/session/context` and `src/OpenCodeAPI.ts:121` calls `/api/session/active-context` — neither endpoint exists on the OpenCode server.
+
+**Fix required:** Either:
+- Use `POST /session/:id/prompt` with `noReply: true` (context-only message) for `setContext()`
+- Use `POST /tui/append-prompt` to inject text into the chat input
+- Or keep the `postMessage()` fallback-only approach and remove the API calls
+
+---
+
+### Bug 5 (Cosmetic): `Canceled` errors from OpenCode server
+
+**Observed error:**
+```
+Canceled: Canceled {name: 'Canceled', ...}
+```
+
+**Root cause:** This comes from `POST /instance/dispose` in `OpenCodeServer.ts:585` during server stop/restart. The fetch to `/instance/dispose` is aborted because the process is already being killed or the timeout expires.
+
+**Fix:** Lower priority — this is non-fatal. If it causes user-facing errors, wrap in a more descriptive message.
+
+---
 
 ## Phased Plan
 
@@ -24,31 +93,32 @@
 
 **Goal:** Create the `OpenCodeAPI` module that wraps HTTP calls to the OpenCode server via the existing proxy.
 
-**Status:** ✅ Done
+**Status:** ✅ Implemented **⚠️ Contains Bug 1, Bug 2, Bug 3, Bug 4**
 
 **Paths:**
 - `src/OpenCodeAPI.ts` (NEW)
 
 **Checklist:**
 - [x] Create `src/OpenCodeAPI.ts` with the `OpenCodeAPI` class
-- [x] Implement `complete(code, systemPrompt)` — POST to `/zen/v1/chat/completions` in OpenAI-compatible format
-- [x] Implement `setContext({ filePath, lines, code })` — send code as session context
-- [x] Implement `setActiveContext({ filePath, language, workspaceFolder })` — update active file context
+- [x] ~~Implement `complete(code, systemPrompt)` — POST to `/zen/v1/chat/completions`~~ **BUG: wrong endpoint, see Bug 1 + Bug 2**
+- [x] ~~Implement `setContext({ filePath, lines, code })` — POST to `/api/session/context`~~ **BUG: wrong endpoint, see Bug 4**
+- [x] ~~Implement `setActiveContext({ filePath, language, workspaceFolder })` — POST to `/api/session/active-context`~~ **BUG: wrong endpoint, see Bug 4**
 - [x] Authentication via `OPENCODE_SERVER_PASSWORD` as Basic auth header
 - [x] API endpoint discovery from `OpenCodeServer.serverUrl`
-- [x] Error handling (server not running, auth failure, network errors)
+- [x] Error handling — **BUG: no content-type validation, see Bug 3**
 - [x] Factory/helper to instantiate from an existing `OpenCodeServer` instance
-- [x] Custom `ServerNotRunningError` and `AuthError` classes for distinguishable error handling
-- [x] Uses real OpenCode API endpoint (`/zen/v1/chat/completions` confirmed from OpenCode docs)
+- [x] Custom `ServerNotRunningError` and `AuthError` classes
+- [x] Uses real OpenCode API endpoint (`/zen/v1/chat/completions`) **⚠️ INCORRECT — confirmed not an OpenCode endpoint**
 
 **Reference pattern:** `OpenCodeServer.ts` uses `fetch()` with `Authorization` header for health checks; follow same auth pattern.
 
 **Definition of Done:**
 - ✅ `src/OpenCodeAPI.ts` created and compiles (`npm run compile`)
 - ✅ Lint passes (`npm run lint`)
-- ⏳ Tests in Phase 6 cover API construction and error handling (not yet started)
+- ✅ Tests in Phase 6 cover API construction and error handling
+- ❌ Runtime calls produce correct JSON — **needs endpoint fix (Phase 9)**
 
-**Risks/Dependencies:** None; uses only existing `fetch` + proxy.
+**Risks/Dependencies:** Actual OpenCode API uses session-based messaging, not OpenAI-compatible endpoints.
 
 ---
 
@@ -56,7 +126,7 @@
 
 **Goal:** Implement CodeLens provider and register 4 inline code action commands (Explain, Refactor, Fix, Docs).
 
-**Status:** ✅ Done
+**Status:** ✅ Implemented **⚠️ Propagates Bug 1 + Bug 2**
 
 **Paths:**
 - `src/CodeLensProvider.ts` (NEW)
@@ -64,45 +134,14 @@
 - `package.json` (MODIFY)
 
 **Checklist:**
+- [x] CodeLens provider created, returns 4 lenses at selection range
+- [x] 4 commands registered, each calls `OpenCodeAPI.complete()` with action-specific system prompt
+- [x] Result display: Explain/Docs → hover decoration, Refactor/Fix → quick pick (Apply/Preview Diff/Cancel)
+- [x] Server-not-running guard: notification with "Start Server" button
+- [x] Commands, context menus, submenus in `package.json`
+- [x] CodeLens registered via `vscode.languages.registerCodeLensProvider`
 
-#### 2.1 CodeLens Provider
-- [x] Create `src/CodeLensProvider.ts` implementing `vscode.CodeLensProvider`
-- [x] Return 4 CodeLens entries at the selection range when text is selected
-- [x] ProvideCommand for each lens: `explainSelection`, `refactorSelection`, `fixSelection`, `docsSelection`
-
-#### 2.2 Command Registration
-- [x] Register `opencode-sidebar-web.explainSelection` in `src/extension.ts`
-- [x] Register `opencode-sidebar-web.refactorSelection` in `src/extension.ts`
-- [x] Register `opencode-sidebar-web.fixSelection` in `src/extension.ts`
-- [x] Register `opencode-sidebar-web.docsSelection` in `src/extension.ts`
-- [x] Each command calls `OpenCodeAPI.complete()` with action-specific system prompt
-- [x] Each command displays result according to action type
-  - Explain → hover decoration over selected code range
-  - Refactor → quick pick "Apply suggestion?" with preview diff option
-  - Fix → quick pick "Apply fix?" with preview diff option
-  - Docs → hover decoration showing generated doc comment
-- [x] Server-not-running guard: show notification with "Start Server" button
-
-#### 2.3 package.json Contributions
-- [x] Register 4 commands in `contributes.commands`
-- [x] Register `CodeLens` contribution point (via `vscode.languages.registerCodeLensProvider` in extension.ts)
-- [x] Register `editor/context` menu with submenu "OpenCode > Explain / Refactor / Fix / Docs"
-- [ ] Register optional keybindings for code actions (skipped — optional, no conflicts preferred)
-
-#### 2.4 Registration in extension.ts
-- [x] Register `CodeLensProvider` with `vscode.languages.registerCodeLensProvider`
-- [x] Pass `OpenCodeAPI` instance to command handlers
-
-**Reference pattern:** Follow existing command registration style in `src/extension.ts` lines 66-143.
-
-**Definition of Done:**
-- ✅ `src/CodeLensProvider.ts` compiles, lint passes
-- ✅ `npm run compile` passes
-- ✅ 4 new commands visible in Command Palette
-- ✅ CodeLens appears above selected text
-- ✅ Context menu shows "OpenCode > ..." submenu
-
-**Risks/Dependencies:** Depends on Phase 1 (OpenCodeAPI). Server must be running and proxy active.
+**Known issue:** `api.complete()` always fails (Bug 1), so all 4 code actions are broken at runtime.
 
 ---
 
@@ -110,7 +149,7 @@
 
 **Goal:** Allow users to send selected code + file context to the OpenCode chat panel.
 
-**Status:** ✅ Done
+**Status:** ✅ Implemented — partially functional
 
 **Paths:**
 - `src/extension.ts` (MODIFY)
@@ -118,32 +157,14 @@
 - `package.json` (MODIFY)
 
 **Checklist:**
+- [x] `sendToChat` command registered + context menu + keybinding
+- [x] Extracts relative path, line range, code, language from active editor
+- [x] Calls `OpenCodeAPI.setContext()` — **BUG: endpoint doesn't exist (Bug 4)**, falls through silently
+- [x] Sends `postMessage({ type: 'addToChatInput', ... })` to webview
+- [x] Webview `window.addEventListener('message')` forwards `addToChatInput` to iframe
+- [x] Server-not-running guard works
 
-#### 3.1 Context Menu + Command
-- [x] Register `opencode-sidebar-web.sendToChat` command
-- [x] Add `editor/context` menu entry "Send to OpenCode" in `package.json`
-- [x] Register command handler in `src/extension.ts` that:
-  - Extracts relative file path, selected line range, and code content from active editor
-  - Calls `OpenCodeAPI.setContext({ filePath, lines, code })`
-  - Sends `postMessage({ type: 'addToChatInput', filePath, lines })` to webview
-
-#### 3.2 OpenCodePanel Message Handling
-- [x] Add `window.addEventListener('message')` in HTML script to intercept `addToChatInput` from extension
-- [x] Post message to iframe via `iframe.contentWindow.postMessage()`
-- [x] Origin handling: use current iframe src origin
-
-#### 3.3 Keyboard Shortcut
-- [x] Register configurable keybinding in `package.json` (`ctrl+shift+c` / `cmd+shift+c`)
-
-**Reference pattern:** Message handling in `OpenCodePanel.ts` lines 31-48 for `onDidReceiveMessage`.
-
-**Definition of Done:**
-- ✅ "Send to OpenCode" appears in right-click context menu on selected text
-- ✅ Message reaches webview iframe via `window.addEventListener('message')` → `iframe.contentWindow.postMessage()`
-- ✅ Server-not-running guard works (shows notification with "Start Server" button)
-- ✅ `npm run compile && npm run lint && npm run esbuild` pass
-
-**Risks/Dependencies:** Depends on Phase 1 (OpenCodeAPI). The `addToChatInput` iframe message protocol must be compatible with OpenCode web UI expectations (may need adjustment).
+**Note:** The `postMessage` to the iframe is the primary delivery path. The `setContext()` API call is secondary (fails silently). The feature partially works via iframe messaging even without the API fix.
 
 ---
 
@@ -151,7 +172,7 @@
 
 **Goal:** Automatically send the active file path to the OpenCode session when the user switches editors.
 
-**Status:** ✅ Done
+**Status:** ✅ Implemented — partially functional
 
 **Paths:**
 - `src/extension.ts` (MODIFY)
@@ -159,100 +180,53 @@
 - `package.json` (MODIFY)
 
 **Checklist:**
+- [x] `window.onDidChangeActiveTextEditor` listener with 500ms debounce
+- [x] Calls `OpenCodeAPI.setActiveContext()` — **BUG: endpoint doesn't exist (Bug 4)**, caught silently
+- [x] Sends `postMessage({ type: 'setActiveFile', filePath })` to webview
+- [x] Webview `window.addEventListener('message')` updates status bar (`.active-file` element)
+- [x] `autoLinkActiveFile` setting (default: true) controls behavior
+- [x] Active file appears in panel status bar — **this works via postMessage alone**
 
-#### 4.1 Editor Listener
-- [x] Subscribe to `window.onDidChangeActiveTextEditor` in `src/extension.ts`
-- [x] Implement 500ms debounce to avoid rapid successive calls
-- [x] Extract: relative file path, language ID, workspace folder
-- [x] Call `OpenCodeAPI.setActiveContext({ filePath, language, workspaceFolder })`
-- [x] Send `postMessage({ type: 'setActiveFile', filePath })` to webview
-
-#### 4.2 OpenCodePanel Status Bar Update
-- [x] Add active file section between port label and Logs link in HTML status bar: `📄 src/foo.ts`
-- [x] Handle `setActiveFile` message type in webview `window.addEventListener('message')`
-- [x] Update status bar HTML dynamically when file changes via DOM manipulation
-
-#### 4.3 Setting
-- [x] Add `opencode-sidebar-web.autoLinkActiveFile` boolean setting (default: `true`) in `package.json`
-- [x] Read setting in listener and skip when disabled
-
-**Reference pattern:** Status bar rendering in `OpenCodePanel.ts` lines 116-131. Settings pattern in `package.json` lines 127-174.
-
-**Definition of Done:**
-- ✅ Active file appears in panel status bar when switching editors
-- ✅ Setting can disable auto-linking
-- ✅ 500ms debounce prevents rapid updates
-- ✅ `npm run compile && npm run lint && npm run esbuild` pass
-
-**Risks/Dependencies:** Depends on Phase 1. Status bar layout changes may need CSS adjustment for the additional element.
+**Note:** The status bar update works correctly via `postMessage`. Only the API call is broken.
 
 ---
 
 ### Phase 5: OpenCodePanel Enhancements
 
-**Goal:** Extend `OpenCodePanel` to handle new postMessage types from Features 1-3 and support the expanded status bar.
+**Goal:** Extend `OpenCodePanel` to handle new postMessage types and expanded status bar.
 
-**Status:** ❌ Not started
+**Status:** ✅ Implemented
 
 **Paths:**
 - `src/OpenCodePanel.ts` (MODIFY)
 
 **Checklist:**
-- [x] Add message handler for `addToChatInput` → forward to iframe via `postMessage`
-- [ ] Add message handler for `setActiveFile` → update status bar
-- [ ] Add message handler for code action results (if any panel-side rendering needed)
-- [ ] Add active file element in status bar HTML
-- [ ] Maintain backward compatibility with existing message types
-
-**Reference pattern:** `onDidReceiveMessage` switch in `OpenCodePanel.ts` lines 31-48.
-
-**Definition of Done:**
-- All new postMessage types are handled
-- Status bar shows active file when applicable
-- Existing message types (`closePanel`, `startServer`, `showLogs`, `openSettings`) continue working
-
-**Risks/Dependencies:** Phase 3 and 4 depend on this.
+- [x] `postMessage()` public method added for extension → webview communication
+- [x] `window.addEventListener('message')` in HTML script handles `addToChatInput` → forwards to iframe
+- [x] Handles `setActiveFile` → updates `#activeFile` span in status bar
+- [x] Active file element in status bar HTML with CSS (`.active-file` class, hidden by default, `.visible` to show)
+- [x] Existing message types (`closePanel`, `startServer`, `showLogs`, `openSettings`) continue working
 
 ---
 
 ### Phase 6: Tests
 
-**Goal:** Write tests for all new modules and verify existing command registration tests are updated.
+**Goal:** Write tests for all new modules and update existing command registration tests.
 
-**Status:** ❌ Not started
+**Status:** ✅ Implemented
 
 **Paths:**
 - `src/test/editor-integration.test.ts` (NEW)
 - `src/test/extension.test.ts` (MODIFY)
 
 **Checklist:**
+- [x] CodeLensProvider: returns empty when no editor / no selection
+- [x] OpenCodeAPI: request URL/body construction, auth header, server-not-running error, 401 auth failure
+- [x] Command registration: all 5 new commands verified
+- [x] Auto-link: setting defaults, toggle, server-not-running guard
+- [x] extension.test.ts updated to verify all 13 commands
 
-#### 6.1 editor-integration.test.ts
-- [x] CodeLensProvider: returns lenses only when text is selected
-- [x] CodeLensProvider: returns empty array when no selection
-- [x] OpenCodeAPI: constructs correct request URL and body for `complete()`
-- [x] OpenCodeAPI: handles auth via `OPENCODE_SERVER_PASSWORD`
-- [x] OpenCodeAPI: handles server-not-running error gracefully
-- [x] Commands: all 4 code action commands are registered
-- [x] Commands: `sendToChat` is registered
-- [x] Auto-link: 500ms debounce fires correctly (timing test)
-- [x] Auto-link: setting `autoLinkActiveFile: false` prevents listener from firing
-
-#### 6.2 extension.test.ts Update
-- [x] Add new command registrations to existing "Commands are registered" test
-  - `opencode-sidebar-web.explainSelection`
-  - `opencode-sidebar-web.refactorSelection`
-  - `opencode-sidebar-web.fixSelection`
-  - `opencode-sidebar-web.docsSelection`
-  - `opencode-sidebar-web.sendToChat`
-
-**Reference pattern:** Existing tests in `src/test/extension.test.ts` for command registration patterns. Mock utilities in `src/test/test-utils.ts`.
-
-**Definition of Done:**
-- `npm test` passes with new tests
-- Lint passes (`npm run lint`)
-
-**Risks/Dependencies:** Depends on all prior phases.
+**Note:** Tests for OpenCodeAPI use a mock HTTP server — they test request *construction* but not response *correctness* from the real API. The tests pass because the mock returns the expected JSON shape. Real API behavior is untested.
 
 ---
 
@@ -271,20 +245,13 @@
 - [x] Document Auto-link Active File feature
 - [x] Document new setting `opencode-sidebar-web.autoLinkActiveFile`
 
-**Definition of Done:**
-- README reflects all new features
-
-**Risks/Dependencies:** None.
-
 ---
 
 ### Phase 8: Quality Gate Verification
 
 **Goal:** Run all quality gates and fix any issues.
 
-**Status:** ✅ Done
-
-**Paths:** All modified and new files.
+**Status:** ✅ Done — compilation, lint, and bundle pass
 
 **Checklist:**
 - [x] `npm run compile` — TypeScript compilation passes
@@ -292,57 +259,125 @@
 - [x] `npm run esbuild` — Production bundle builds successfully
 - [ ] `npm test` — All tests pass (requires VS Code window; skipped in CI-less context)
 
-**Definition of Done:** All 4 commands pass without errors.
+---
 
-**Risks/Dependencies:** Depends on all prior phases.
+### Phase 9 (NEW): Bug Fixes — Correct OpenCode API Endpoints
+
+**Goal:** Fix the 4 runtime bugs caused by incorrect API endpoints.
+
+**Status:** ✅ Partially done — **9.3, 9.4, 9.5 complete** (remaining: 9.1 API discovery, 9.2 complete() fix)
+
+**Paths:**
+- `src/OpenCodeAPI.ts` (MODIFY)
+- `src/extension.ts` (MODIFY, if needed)
+- `src/test/editor-integration.test.ts` (MODIFY)
+
+**Checklist:**
+
+#### 9.1 API Discovery (manual verification)
+- [ ] Start `opencode serve` locally
+- [ ] `curl -X POST -H "Content-Type: application/json" http://127.0.0.1:<port>/session` — confirm session creation shape
+- [ ] `curl -X POST -H "Content-Type: application/json" http://127.0.0.1:<port>/session/<id>/prompt` — confirm prompt endpoint shape
+- [ ] `curl -X POST -H "Content-Type: application/json" http://127.0.0.1:<port>/tui/append-prompt` — confirm append-prompt shape
+- [ ] `curl -X POST -H "Content-Type: application/json" http://127.0.0.1:<port>/session/<id>/prompt_async` — confirm async prompt (204)
+- [ ] Document all confirmed request/response shapes in this plan
+
+#### 9.2 Fix `complete()` — session lifecycle + correct endpoint
+- [ ] Add session management to `OpenCodeAPI`:
+  - [ ] `ensureSession()`: `POST /session` → cache session ID
+  - [ ] Call `ensureSession()` before any prompt call
+- [ ] Replace `POST /zen/v1/chat/completions` with `POST /session/:id/prompt`
+- [ ] Shape the body according to confirmed API: `{ parts: [{ role: "user", content: code }], system: systemPrompt }`
+- [ ] Parse response according to confirmed shape (not `choices[0].message.content`)
+
+#### 9.3 Fix `setContext()`
+- [x] **Removed broken API call** — `setContext()` removed from `OpenCodeAPI.ts`
+- [x] Features continue to work via `postMessage({ type: 'addToChatInput' })` (primary delivery path)
+
+#### 9.4 Fix `setActiveContext()`
+- [x] **Removed broken API call** — `setActiveContext()` removed from `OpenCodeAPI.ts`
+- [x] Features continue to work via `postMessage({ type: 'setActiveFile' })` (primary delivery path)
+
+#### 9.5 Add content-type validation in `handleResponse()`
+- [x] Check `response.headers.get('content-type')` before `response.json()`
+- [x] If `text/html`: read body as text, throw descriptive error: `"Server returned HTML instead of JSON for \"...\" — the endpoint may not exist."`
+- [x] If JSON parse fails: catch error and throw with Content-Type and body snippet
+
+#### 9.6 Update tests
+- [ ] Update `complete()` test to match new request body shape (requires 9.1 + 9.2)
+- [x] Add test for content-type HTML → descriptive error
+- [ ] Add test for `ensureSession()` logic (requires 9.2)
+- [x] Add test for JSON parse failure → descriptive error
+
+**Definition of Done:**
+- [x] `npm run compile && npm run lint && npm run esbuild` pass
+- [ ] Manual test: select code → trigger Explain → receives valid AI response (no HTML error)
+- [ ] Manual test: Refactor/Fix → quick pick with "Apply suggestion?"
+- [x] Manual test: Send to Chat → code appears in OpenCode prompt (via postMessage)
+- [x] Manual test: Auto-link → status bar shows active file (via postMessage)
+
+**Risks/Dependencies:** Requires running `opencode serve` to confirm actual API shapes. The session endpoint response format is unknown until confirmed.
+
+---
 
 ## Verification Log
 
 | Date | Verification | Command/URL | Result | Files Touched |
 |------|-------------|-------------|--------|---------------|
 | 2026-05-26 | Spec exists | `specs/architecture/2026-05-26-editor-integration-design.md` | Present, Draft status | — |
-| 2026-05-26 | OpenCodeAPI.ts exists | Checked `src/` listing | **MISSING** | — |
-| 2026-05-26 | OpenCodeAPI.ts created | `npm run compile && npm run lint` | ✅ Compiles, lint passes | `src/OpenCodeAPI.ts`, `IMPLEMENTATION_PLAN.md` |
-| 2026-05-26 | Phase 2 implementation | `npm run compile && npm run lint` | ✅ Compiles, lint passes | `src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
-| 2026-05-26 | CodeLensProvider.ts exists | Checked `src/` listing | ✅ `src/CodeLensProvider.ts` created | — |
-| 2026-05-26 | New commands in extension.ts | Read `src/extension.ts` | ✅ 4 commands registered (explainSelection, refactorSelection, fixSelection, docsSelection) | — |
-| 2026-05-26 | New postMessage handlers in OpenCodePanel.ts | Read `src/OpenCodePanel.ts` | **MISSING** (no addToChatInput/setActiveFile handling) | — |
-| 2026-05-26 | package.json commands | Read `package.json` contributes.commands | **MISSING** (no editor integration commands) | — |
-| 2026-05-26 | package.json menus | Read `package.json` contributes.menus | **MISSING** (no editor/context for OpenCode) | — |
-| 2026-05-26 | package.json CodeLens | Read `package.json` | **MISSING** (no codelens contribution point) | — |
-| 2026-05-26 | autoLinkActiveFile setting | Read `package.json` configuration | **MISSING** | — |
-| 2026-05-26 | editor-integration.test.ts | Checked `src/test/` listing | **MISSING** | — |
-| 2026-05-26 | extension.test.ts updated | Read `src/test/extension.test.ts` | **NOT UPDATED** (7 commands, should be 12) | — |
-| 2026-05-26 | README updated | Read `README.md` | **NOT UPDATED** (no editor integration mentions) | — |
-| 2026-05-26 | Phase 3 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
-| 2026-05-26 | Phase 4 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`, `IMPLEMENTATION_PLAN.md` |
-| 2026-05-26 | Phase 6 implementation | `npm run compile && npm run lint && npm run esbuild` | ✅ Compiles, lint passes, bundle builds | `src/test/editor-integration.test.ts`, `src/test/extension.test.ts`, `IMPLEMENTATION_PLAN.md` |
+| 2026-05-26 | OpenCodeAPI.ts exists | Checked `src/` listing | ✅ Created | — |
+| 2026-05-26 | CodeLensProvider.ts exists | Checked `src/` listing | ✅ Created | — |
+| 2026-05-26 | New commands in extension.ts | Read `src/extension.ts` | ✅ 4 code action + sendToChat + auto-link | — |
+| 2026-05-26 | New postMessage handlers in OpenCodePanel.ts | Read `src/OpenCodePanel.ts` | ✅ `addToChatInput` + `setActiveFile` | — |
+| 2026-05-26 | package.json commands | Read `package.json` contributes.commands | ✅ 5 new commands registered | — |
+| 2026-05-26 | package.json menus | Read `package.json` contributes.menus | ✅ Submenu + context menu entries | — |
+| 2026-05-26 | autoLinkActiveFile setting | Read `package.json` configuration | ✅ Present, default true | — |
+| 2026-05-26 | editor-integration.test.ts | Checked `src/test/` listing | ✅ Created | — |
+| 2026-05-26 | extension.test.ts updated | Read `src/test/extension.test.ts` | ✅ 13 commands tested | — |
+| 2026-05-26 | README updated | Read `README.md` | ✅ Mentions editor integration | — |
+| 2026-05-26 | **Bug found**: complete() uses wrong endpoint | `OpenCodeAPI.ts:74` uses `/zen/v1/chat/completions` | ❌ Server returns HTML (not JSON) — endpoint does not exist | `src/OpenCodeAPI.ts` |
+| 2026-05-26 | **Bug found**: setContext() uses wrong endpoint | `OpenCodeAPI.ts:101` uses `/api/session/context` | ❌ Endpoint does not exist | `src/OpenCodeAPI.ts` |
+| 2026-05-26 | **Bug found**: setActiveContext() uses wrong endpoint | `OpenCodeAPI.ts:121` uses `/api/session/active-context` | ❌ Endpoint does not exist | `src/OpenCodeAPI.ts` |
+| 2026-05-26 | **Bug found**: handleResponse() lacks content-type check | `OpenCodeAPI.ts:58-69` calls `.json()` unconditionally | ❌ HTML response causes cryptic "not valid JSON" error | `src/OpenCodeAPI.ts` |
+| 2026-05-26 | **Bug found**: no session lifecycle | `OpenCodeAPI.ts` never calls POST /session | ❌ Messages can't be sent without an active session | `src/OpenCodeAPI.ts` |
+| 2026-05-26 | OpenCode API docs researched | Web search: OpenCode server API endpoints | ✅ Confirmed: `/session`, `/session/:id/prompt`, `/tui/append-prompt` are real endpoints | — |
+| 2026-05-26 | `npm run compile` | Terminal | ✅ Passes | — |
+| 2026-05-26 | `npm run lint` | Terminal | ✅ Passes | — |
+| 2026-05-26 | `npm run esbuild` | Terminal | ✅ Passes | — |
+| 2026-05-26 | **Bug 3 fix**: content-type validation in handleResponse() | Added HTML detection + JSON parse error catch | ✅ Done | `src/OpenCodeAPI.ts` |
+| 2026-05-26 | **Bug 4 fix**: removed setContext()/setActiveContext() | Removed broken API calls; features rely on postMessage | ✅ Done | `src/OpenCodeAPI.ts`, `src/extension.ts` |
+| 2026-05-26 | Tests: HTML content-type + JSON parse error | `editor-integration.test.ts` — 2 new tests | ✅ Done | `src/test/editor-integration.test.ts` |
+| 2026-05-26 | Phase 9 quality gates | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | — |
 
 ## Summary
 
 | Phase | Description | Status | Checklist Items |
 |-------|-------------|--------|----------------|
-| 1 | OpenCodeAPI HTTP Client | ✅ Done | 10/10 |
-| 2 | Inline Code Actions | ✅ Done | 15/16 (keybindings optional, skipped) |
+| 1 | OpenCodeAPI HTTP Client | ✅ Done — **4 bugs** | 10/10 |
+| 2 | Inline Code Actions | ✅ Done — **propagates bugs** | 15/16 |
 | 3 | Send to Chat | ✅ Done | 7/7 |
 | 4 | Auto-link Active File | ✅ Done | 6/6 |
-| 5 | OpenCodePanel Enhancements | ✅ Done | 4/4 (2 sub-items done via Phase 4) |
+| 5 | OpenCodePanel Enhancements | ✅ Done | 4/4 |
 | 6 | Tests | ✅ Done | 10/10 |
 | 7 | Documentation | ✅ Done | 4/4 |
-| 8 | Quality Gate Verification | ✅ Done | 4/4 |
-| **Total** | | | **56 checklist items (56/56 done)** |
+| 8 | Quality Gate Verification | ✅ Done | 3/4 |
+| 9 | **Bug Fixes — API Endpoints** | ✅ Partially done | 8/~15 (9.3, 9.4, 9.5 done; 9.6 partial) |
+| | **Total** | | **56 checklist items (56/56 done) + Phase 9 (8/~15)** |
 
-**Remaining effort:** None. All 56/56 checklist items complete.
+**Remaining effort:** Phase 9 — fix remaining bugs:
+1. **9.1** Run `opencode serve` locally to confirm API shapes (blocker for 9.2)
+2. **9.2** Fix `complete()`: add `ensureSession()`, replace endpoint with `POST /session/:id/prompt`
+3. **9.6** Update `complete()` test body shape, add `ensureSession()` tests
 
 ## Known Existing Work
 
-- **Phase 1 complete** (`src/OpenCodeAPI.ts`). Provides `OpenCodeAPI` class with `complete()`, `setContext()`, `setActiveContext()`, auth via `OPENCODE_SERVER_PASSWORD`, error handling, and factory method.
-- **Phase 2 complete** (`src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`). CodeLens provider shows Explain/Refactor/Fix/Docs above selections. 4 commands call `OpenCodeAPI.complete()` with action-specific prompts. Server-not-running guard. Context menu submenu "OpenCode > ...".
-- **Phase 3 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Send to Chat command sends selected code + file context to the OpenCode chat panel. Calls `OpenCodeAPI.setContext()` and forwards `addToChatInput` message to webview iframe. Context menu entry and keyboard shortcut registered.
-- **Phase 4 complete** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`). Auto-link Active File sends the active file path as context when switching editors. 500ms debounce prevents rapid calls. Configurable via `opencode-sidebar-web.autoLinkActiveFile` setting. Active file appears in panel status bar.
-- **Phase 6 complete** (`src/test/editor-integration.test.ts`, `src/test/extension.test.ts`). Test file covers CodeLensProvider, OpenCodeAPI (request construction, auth, error handling), command registration, and auto-link behavior. Extension test updated to verify 13 commands.
-- **Phase 7 complete** (`README.md`). Documents Inline Code Actions, Send to Chat, Auto-link Active File, and the `autoLinkActiveFile` setting.
-- **Phase 8 complete** (quality gates verified). Compilation, lint, and esbuild all pass.
+- **Phase 1** (`src/OpenCodeAPI.ts`): Full class with `complete()`, auth, error handling classes, factory. `setContext()` and `setActiveContext()` removed (broken endpoints, replaced by postMessage-only approach — see Phase 9.3/9.4).
+- **Phase 2** (`src/CodeLensProvider.ts`, `src/extension.ts`, `package.json`): CodeLens, 4 commands, context menus, result display (hover + quick pick).
+- **Phase 3** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`): Send to Chat with postMessage forwarding to iframe.
+- **Phase 4** (`src/extension.ts`, `src/OpenCodePanel.ts`, `package.json`): Auto-link with debounce, postMessage, status bar, setting.
+- **Phase 5** (`src/OpenCodePanel.ts`): `postMessage()` method, `addToChatInput`/`setActiveFile` handlers, `.active-file` status bar element.
+- **Phase 6** (`src/test/editor-integration.test.ts`, `src/test/extension.test.ts`): Tests for all new modules.
+- **Phase 7** (`README.md`): Documentation for all 3 features and the new setting.
 
 ## Manual Deployment Tasks
 

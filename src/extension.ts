@@ -295,13 +295,7 @@ export async function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      try {
-        await api.setContext({ filePath, lines, code });
-        panel?.postMessage({ type: 'addToChatInput', filePath, lines, code, language });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        vscode.window.showErrorMessage(`Failed to send to chat: ${msg}`);
-      }
+      panel?.postMessage({ type: 'addToChatInput', filePath, lines, code, language });
     })
   );
 
@@ -313,10 +307,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const filePath = vscode.workspace.asRelativePath(editor.document.uri);
     const language = editor.document.languageId;
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri)?.name || '';
-    try {
-      await api.setActiveContext({ filePath, language, workspaceFolder });
-      panel?.postMessage({ type: 'setActiveFile', filePath });
-    } catch { /* silently ignore — server may not support the endpoint */ }
+    panel?.postMessage({ type: 'setActiveFile', filePath });
   }
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {

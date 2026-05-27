@@ -14,18 +14,6 @@ export class AuthError extends Error {
   }
 }
 
-export interface ContextOptions {
-  filePath: string;
-  lines: string;
-  code: string;
-}
-
-export interface ActiveContextOptions {
-  filePath: string;
-  language: string;
-  workspaceFolder: string;
-}
-
 export class OpenCodeAPI {
   private _password: string | undefined;
 
@@ -65,7 +53,23 @@ export class OpenCodeAPI {
         `OpenCode API error (${context}): ${response.status} ${response.statusText}${body ? ` — ${body.slice(0, 200)}` : ''}`
       );
     }
-    return response.json();
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('text/html')) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Server returned HTML instead of JSON for "${context}" — the endpoint may not exist. Response: ${body.slice(0, 200)}`
+      );
+    }
+
+    try {
+      return await response.json();
+    } catch (parseErr) {
+      const body = await response.text().catch(() => '');
+      throw new Error(
+        `Failed to parse response as JSON for "${context}". Content-Type: "${contentType}". Body: ${body.slice(0, 200)}`
+      );
+    }
   }
 
   async complete(code: string, systemPrompt: string): Promise<string> {
@@ -93,46 +97,6 @@ export class OpenCodeAPI {
 
     const data = await this.handleResponse(response, 'complete');
     return data.choices?.[0]?.message?.content || '';
-  }
-
-  async setContext(options: ContextOptions): Promise<void> {
-    this.assertServerRunning();
-
-    const response = await fetch(`${this.baseUrl}/api/session/context`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(options),
-      signal: AbortSignal.timeout(10000),
-    }).catch((err) => {
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        throw new ServerNotRunningError(
-          `Cannot reach OpenCode server at ${this.baseUrl} — ${err.message}`
-        );
-      }
-      throw err;
-    });
-
-    await this.handleResponse(response, 'setContext');
-  }
-
-  async setActiveContext(options: ActiveContextOptions): Promise<void> {
-    this.assertServerRunning();
-
-    const response = await fetch(`${this.baseUrl}/api/session/active-context`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify(options),
-      signal: AbortSignal.timeout(10000),
-    }).catch((err) => {
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        throw new ServerNotRunningError(
-          `Cannot reach OpenCode server at ${this.baseUrl} — ${err.message}`
-        );
-      }
-      throw err;
-    });
-
-    await this.handleResponse(response, 'setActiveContext');
   }
 
   static fromServer(server: OpenCodeServer): OpenCodeAPI {

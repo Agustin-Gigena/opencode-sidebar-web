@@ -32,7 +32,7 @@ suite('CodeLensProvider', () => {
 
 suite('OpenCodeAPI', () => {
   test('constructs correct request URL and body for complete()', async () => {
-    const mockSrv = await createMockServer(18793, {});
+    const mockSrv = await createMockServer(18793, { 'Content-Type': 'application/json' });
     try {
       const mockServer = {
         isRunning: true,
@@ -116,6 +116,60 @@ suite('OpenCodeAPI', () => {
         assert.fail('Should have thrown');
       } catch (err) {
         assert.ok(err instanceof AuthError);
+      }
+    } finally {
+      server.close();
+    }
+  });
+
+  test('throws descriptive error when server returns HTML', async () => {
+    const server = await new Promise<http.Server>((resolve) => {
+      const srv = http.createServer((_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<!doctype html><html><body>Not found</body></html>');
+      });
+      srv.listen(18796, '127.0.0.1', () => resolve(srv));
+    });
+    try {
+      const mockServer = {
+        isRunning: true,
+        serverUrl: 'http://127.0.0.1:18796',
+      } as unknown as OpenCodeServer;
+      const api = new OpenCodeAPI(mockServer);
+      try {
+        await api.complete('test', 'test');
+        assert.fail('Should have thrown');
+      } catch (err) {
+        assert.ok(err instanceof Error);
+        assert.ok((err as Error).message.includes('text/html'));
+        assert.ok((err as Error).message.includes('doctype'));
+      }
+    } finally {
+      server.close();
+    }
+  });
+
+  test('throws descriptive error on JSON parse failure', async () => {
+    const server = await new Promise<http.Server>((resolve) => {
+      const srv = http.createServer((_req, res) => {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end('not valid json');
+      });
+      srv.listen(18797, '127.0.0.1', () => resolve(srv));
+    });
+    try {
+      const mockServer = {
+        isRunning: true,
+        serverUrl: 'http://127.0.0.1:18797',
+      } as unknown as OpenCodeServer;
+      const api = new OpenCodeAPI(mockServer);
+      try {
+        await api.complete('test', 'test');
+        assert.fail('Should have thrown');
+      } catch (err) {
+        assert.ok(err instanceof Error);
+        assert.ok((err as Error).message.includes('Failed to parse response as JSON'));
+        assert.ok((err as Error).message.includes('not valid json'));
       }
     } finally {
       server.close();
