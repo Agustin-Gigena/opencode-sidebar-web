@@ -1,0 +1,25 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "ralph": {
+      "description": "Hands-off agent for usage with Ralph Loops",
+      "mode": "primary",
+      "reasoningEffort": "high",
+      "tools": {
+        "web-search_*": false
+      },
+      "permission": {
+        "edit": {
+          "opencode.jsonc": "deny",
+          "ralph.toml": "deny",
+          "logs/*": "deny"
+        }
+      }
+    }
+  },
+  "permission": {
+    "edit": {
+      "logs/*": "deny"
+    }
+  }
+}

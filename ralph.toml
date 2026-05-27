@@ -1,0 +1,14 @@
+agent = "opencode"
+agent-mode = "ralph"
+
+max-iterations = 25
+
+specs-dir = "specs"
+specs-index-file = "README.md"
+implementation-plan-name = "IMPLEMENTATION_PLAN.md"
+prompts-dir = ".ralph/prompts"
+
+log-file = "logs/ralph.log"
+
+[prompt-overrides.plan]
+agent-mode = "plan"
