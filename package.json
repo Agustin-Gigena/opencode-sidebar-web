@@ -235,6 +235,11 @@
           "type": "boolean",
           "default": true,
           "description": "Instalar automáticamente opencode al activarse en un devcontainer si no está presente"
+        },
+        "opencode-sidebar-web.autoLinkActiveFile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enviar automáticamente el archivo activo como contexto al cambiar de editor"
         }
       }
     }

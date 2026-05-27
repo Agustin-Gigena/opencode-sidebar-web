@@ -211,6 +211,12 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       color:inherit; opacity:.7; text-decoration:none; cursor:pointer;
     }
     .status-bar a:hover { opacity:1; text-decoration:underline; }
+    .status-bar .active-file {
+      max-width:200px; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap; opacity:0.8; display:none;
+    }
+    .status-bar .active-file::before { content:"\\1F4C4 "; }
+    .status-bar .active-file.visible { display:inline; }
     .overlay {
       position:absolute; inset:24px 0 0 0; display:flex; flex-direction:column;
       align-items:center; justify-content:center; gap:10px;
@@ -246,6 +252,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
   <div class="status-bar">
     <span class="dot"></span>
     <span>${statusText}</span>
+    <span id="activeFile" class="active-file"></span>
     <span class="spacer"></span>
     <a onclick="showLogs()">Logs</a>
     <a onclick="openSettings()" style="margin-left:8px">Settings</a>
@@ -302,6 +309,17 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
             { type: 'addToChatInput', filePath: msg.filePath, lines: msg.lines },
             origin
           );
+        }
+      } else if (msg.type === 'setActiveFile') {
+        const el = document.getElementById('activeFile');
+        if (el) {
+          if (msg.filePath) {
+            el.textContent = msg.filePath;
+            el.classList.add('visible');
+          } else {
+            el.textContent = '';
+            el.classList.remove('visible');
+          }
         }
       }
     });

@@ -305,6 +305,26 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  let autoLinkDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  async function handleActiveEditorChange(editor: vscode.TextEditor | undefined): Promise<void> {
+    if (!editor || !server?.isRunning) { return; }
+    const config = vscode.workspace.getConfiguration('opencode-sidebar-web');
+    if (!config.get('autoLinkActiveFile', true)) { return; }
+    const filePath = vscode.workspace.asRelativePath(editor.document.uri);
+    const language = editor.document.languageId;
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(editor.document.uri)?.name || '';
+    try {
+      await api.setActiveContext({ filePath, language, workspaceFolder });
+      panel?.postMessage({ type: 'setActiveFile', filePath });
+    } catch { /* silently ignore — server may not support the endpoint */ }
+  }
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (autoLinkDebounceTimer) { clearTimeout(autoLinkDebounceTimer); }
+      autoLinkDebounceTimer = setTimeout(() => handleActiveEditorChange(editor), 500);
+    })
+  );
+
   server.onDidChangeStatus((running) => {
     vscode.commands.executeCommand('setContext', 'opencodeSidebarServerRunning', running);
     if (running) {
