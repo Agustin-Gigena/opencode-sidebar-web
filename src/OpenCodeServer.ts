@@ -404,6 +404,7 @@ export class OpenCodeServer {
     for (const c of candidates) {
       try {
         if (fs.existsSync(c)) {
+          this._outputChannel.appendLine(`Using packaged binary: ${c}`);
           return c;
         }
       } catch { /* next */ }
@@ -426,38 +427,26 @@ export class OpenCodeServer {
     const targetDir = path.join(this._storagePath, 'bin');
     const targetPath = path.join(targetDir, binaryName);
 
-    if (fs.existsSync(targetPath) && this.isExecutableFile(targetPath)) {
-      return targetPath;
-    }
-
-    const extModules = path.join(this._extensionPath, 'node_modules');
-    const sourceCandidates = [
-      path.join(extModules, 'opencode-ai', 'bin', binaryName),
-      path.join(extModules, 'opencode-ai', 'bin', '.opencode'),
-      path.join(extModules, 'opencode-ai', 'bin', 'opencode'),
-      path.join(extModules, '.bin', 'opencode'),
-      path.join(extModules, '.bin', 'opencode.cmd'),
-    ];
-
-    for (const sourcePath of sourceCandidates) {
+    const packagedBinary = this.findPackagedBinaryPath();
+    if (packagedBinary) {
       try {
-        if (!fs.existsSync(sourcePath)) {
-          continue;
-        }
         fs.mkdirSync(targetDir, { recursive: true });
-        fs.copyFileSync(sourcePath, targetPath);
+        if (packagedBinary !== targetPath) {
+          fs.copyFileSync(packagedBinary, targetPath);
+        }
         if (platform() !== 'win32' && !targetPath.endsWith('.exe')) {
           fs.chmodSync(targetPath, 0o755);
         }
         if (fs.existsSync(targetPath) && this.isExecutableFile(targetPath)) {
+          this._outputChannel.appendLine(`Prepared bundled binary: ${targetPath}`);
           return targetPath;
         }
       } catch {
-        // try the next candidate
+        // fall back to the packaged path directly
       }
     }
 
-    return undefined;
+    return packagedBinary;
   }
 
   private findBinaryPath(): string | undefined {
@@ -553,16 +542,10 @@ export class OpenCodeServer {
     }
 
     if (!binary) {
-      if (this.isRemoteEnvironment()) {
-        this._outputChannel.appendLine('OpenCode binary not found. Installing...');
-        await this.installBinary();
-        binary = this.findBinaryPath();
-      }
-      if (!binary) {
-        throw new Error(
-          `OpenCode binary could not be prepared for this environment. Run "npm install ${OPENCODE_PACKAGE}" in the extension directory, or use the "Install OpenCode" command.`
-        );
-      }
+      this._outputChannel.appendLine('OpenCode binary could not be prepared from the extension package.');
+      throw new Error(
+        `OpenCode binary could not be prepared for this environment. The extension package should already include it.`
+      );
     }
 
     this._outputChannel.appendLine(`Starting OpenCode server...`);
