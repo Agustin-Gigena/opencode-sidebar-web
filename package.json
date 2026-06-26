@@ -195,6 +195,6 @@
     "typescript-eslint": "^8.56.1"
   },
   "dependencies": {
-    "opencode-ai": "^1.15.10"
+    "opencode-ai": "^1.17.11"
   }
 }

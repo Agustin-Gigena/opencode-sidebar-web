@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ChildProcess, spawn, exec, execSync } from 'child_process';
+import { ChildProcess, exec, execFile, execSync, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
@@ -37,11 +37,16 @@ export class OpenCodeServer {
   private _onDidChangeStatus = new vscode.EventEmitter<boolean>();
   readonly onDidChangeStatus = this._onDidChangeStatus.event;
   private _extensionPath: string;
+  private _storagePath: string;
   private _existingServerUrl: string | null = null;
   private _webviewUrl: string = '';
 
   constructor(context: vscode.ExtensionContext) {
     this._extensionPath = context.extensionPath;
+    this._storagePath = context.globalStorageUri?.fsPath
+      || context.storageUri?.fsPath
+      || path.join(context.extensionPath, '.storage');
+    fs.mkdirSync(this._storagePath, { recursive: true });
     this._outputChannel = vscode.window.createOutputChannel('OpenCode Server');
 
     this._statusBarItem = vscode.window.createStatusBarItem(
@@ -57,6 +62,30 @@ export class OpenCodeServer {
   }
 
   private _installTerminal: vscode.Terminal | null = null;
+
+  private getNodeCompatibilityMessage(): string | undefined {
+    const major = parseInt(process.versions.node.split('.')[0], 10);
+    if (major < 18) {
+      return `OpenCode installation requires Node.js 18+ (recommended 22). Current runtime is ${process.version}.`;
+    }
+    return undefined;
+  }
+
+  private getPackageManagerInvocation(): { command: string; args: string[] } {
+    const installArgs = ['install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'];
+    const npmExecPath = process.env.npm_execpath;
+    if (npmExecPath) {
+      return {
+        command: process.execPath,
+        args: [npmExecPath, ...installArgs],
+      };
+    }
+
+    return {
+      command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
+      args: installArgs,
+    };
+  }
 
   async installBinary(): Promise<void> {
     if (this._installTerminal) {
@@ -91,18 +120,35 @@ export class OpenCodeServer {
       cancellable: false,
     }, async (progress) => {
       return new Promise<void>((resolve, reject) => {
-        const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-        npmProcess = spawn(npmCommand, [
-          'install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'
-        ], {
+        let completed = false;
+        let timer: NodeJS.Timeout | undefined;
+
+        const compatibilityMessage = this.getNodeCompatibilityMessage();
+        if (compatibilityMessage) {
+          completed = true;
+          if (timer) {
+            clearInterval(timer);
+          }
+          reject(new Error(compatibilityMessage));
+          return;
+        }
+
+        const { command, args } = this.getPackageManagerInvocation();
+        this._outputChannel.appendLine(`Running install command: ${command} ${args.join(' ')}`);
+
+        const nodeExecutable = process.execPath;
+        const nodeVersion = process.versions.node;
+        this._outputChannel.appendLine(`Using Node ${nodeVersion} from ${nodeExecutable}`);
+
+        npmProcess = execFile(command, args, {
           cwd: this._extensionPath,
-          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+          env: process.env,
         });
 
         const startTime = Date.now();
         const ESTIMATED_DURATION = 30000;
         let lineCount = 0;
-        let completed = false;
 
         const barWidth = 30;
         const renderBar = (pct: number) => {
@@ -121,7 +167,7 @@ export class OpenCodeServer {
           writeEmitter.fire(`\r${bar}`);
         };
 
-        const timer = setInterval(updateProgress, 200);
+        timer = setInterval(updateProgress, 200);
 
         npmProcess.stdout?.on('data', (data: Buffer) => {
           writeEmitter.fire(data.toString());
@@ -155,6 +201,7 @@ export class OpenCodeServer {
           const message = processError.code === 'ENOENT'
             ? `npm install failed: ${processError.message}. Please ensure npm is installed and available in PATH.`
             : `npm install failed: ${processError.message}`;
+          this._outputChannel.appendLine(`Install process error: ${message}`);
           reject(new Error(message));
         });
       });
@@ -200,8 +247,9 @@ export class OpenCodeServer {
       }
     } catch { /* pgrep not available or no process */ }
 
-    // 3. Try default port 4096 only if binary is installed
-    if (this.findBinaryPath()) {
+    // 3. Only try the default port if there is a real local binary and the port is likely to be serving.
+    const packagedBinary = this.findPackagedBinaryPath();
+    if (packagedBinary) {
       results.push({ url: `http://127.0.0.1:${OPENCODE_DEFAULT_PORT}`, password: envPassword || undefined });
     }
 
@@ -342,7 +390,82 @@ export class OpenCodeServer {
     }
   }
 
+  private findPackagedBinaryPath(): string | undefined {
+    const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
+    const extModules = path.join(this._extensionPath, 'node_modules');
+    const candidates = [
+      path.join(extModules, 'opencode-ai', 'bin', binaryName),
+      path.join(extModules, 'opencode-ai', 'bin', '.opencode'),
+      path.join(extModules, '.bin', 'opencode'),
+      path.join(extModules, '.bin', 'opencode.cmd'),
+      path.join(extModules, 'opencode-ai', 'bin', 'opencode'),
+    ];
+
+    for (const c of candidates) {
+      try {
+        if (fs.existsSync(c)) {
+          return c;
+        }
+      } catch { /* next */ }
+    }
+
+    return undefined;
+  }
+
+  private isExecutableFile(filePath: string): boolean {
+    try {
+      fs.accessSync(filePath, fs.constants.X_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private ensureBundledBinary(): string | undefined {
+    const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
+    const targetDir = path.join(this._storagePath, 'bin');
+    const targetPath = path.join(targetDir, binaryName);
+
+    if (fs.existsSync(targetPath) && this.isExecutableFile(targetPath)) {
+      return targetPath;
+    }
+
+    const extModules = path.join(this._extensionPath, 'node_modules');
+    const sourceCandidates = [
+      path.join(extModules, 'opencode-ai', 'bin', binaryName),
+      path.join(extModules, 'opencode-ai', 'bin', '.opencode'),
+      path.join(extModules, 'opencode-ai', 'bin', 'opencode'),
+      path.join(extModules, '.bin', 'opencode'),
+      path.join(extModules, '.bin', 'opencode.cmd'),
+    ];
+
+    for (const sourcePath of sourceCandidates) {
+      try {
+        if (!fs.existsSync(sourcePath)) {
+          continue;
+        }
+        fs.mkdirSync(targetDir, { recursive: true });
+        fs.copyFileSync(sourcePath, targetPath);
+        if (platform() !== 'win32' && !targetPath.endsWith('.exe')) {
+          fs.chmodSync(targetPath, 0o755);
+        }
+        if (fs.existsSync(targetPath) && this.isExecutableFile(targetPath)) {
+          return targetPath;
+        }
+      } catch {
+        // try the next candidate
+      }
+    }
+
+    return undefined;
+  }
+
   private findBinaryPath(): string | undefined {
+    const bundledBinary = this.ensureBundledBinary();
+    if (bundledBinary) {
+      return bundledBinary;
+    }
+
     const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
 
     try {
@@ -425,6 +548,11 @@ export class OpenCodeServer {
 
     let binary = this.findBinaryPath();
     if (!binary) {
+      this._outputChannel.appendLine('No bundled binary was found; attempting to prepare it from the extension package...');
+      binary = this.ensureBundledBinary();
+    }
+
+    if (!binary) {
       if (this.isRemoteEnvironment()) {
         this._outputChannel.appendLine('OpenCode binary not found. Installing...');
         await this.installBinary();
@@ -432,7 +560,7 @@ export class OpenCodeServer {
       }
       if (!binary) {
         throw new Error(
-          `OpenCode binary not found. Run "npm install ${OPENCODE_PACKAGE}" in the extension directory, or use the "Install OpenCode" command.`
+          `OpenCode binary could not be prepared for this environment. Run "npm install ${OPENCODE_PACKAGE}" in the extension directory, or use the "Install OpenCode" command.`
         );
       }
     }
@@ -440,7 +568,12 @@ export class OpenCodeServer {
     this._outputChannel.appendLine(`Starting OpenCode server...`);
     this._outputChannel.appendLine(`Binary: ${binary}`);
 
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    const activeWorkspace = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
+    const workspaceFolder = vscode.workspace.workspaceFolders?.find((folder) => folder.uri.fsPath === activeWorkspace?.uri.fsPath)?.uri.fsPath
+      || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+      || vscode.workspace.workspaceFile?.fsPath
+      || this._extensionPath;
 
     const args = ['serve', '--port', '0', '--hostname', this._hostname];
 
@@ -449,7 +582,7 @@ export class OpenCodeServer {
     );
 
     this.process = spawn(binary, args, {
-      cwd: workspaceFolder || undefined,
+      cwd: workspaceFolder,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
