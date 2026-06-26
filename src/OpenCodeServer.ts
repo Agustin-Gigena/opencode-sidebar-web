@@ -304,9 +304,20 @@ export class OpenCodeServer {
   private async resolveWebviewUrl(): Promise<void> {
     if (this.isRemoteEnvironment() && this._proxyPort > 0) {
       const localUri = vscode.Uri.parse(`http://${this._hostname}:${this._proxyPort}`);
-      const external = await vscode.env.asExternalUri(localUri);
-      this._webviewUrl = external.toString();
-      this._outputChannel.appendLine(`Resolved external URI: ${this._webviewUrl}`);
+      try {
+        this._outputChannel.appendLine(
+          `Resolving remote URI for proxy at ${localUri.toString()}`
+        );
+        const external = await vscode.env.asExternalUri(localUri);
+        this._webviewUrl = external.toString();
+        this._outputChannel.appendLine(`Resolved external URI: ${this._webviewUrl}`);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this._outputChannel.appendLine(
+          `Failed to resolve external URI: ${message}. Falling back to local proxy URL.`
+        );
+        this._webviewUrl = `http://${this._hostname}:${this._proxyPort}`;
+      }
     } else if (this._proxyPort > 0) {
       this._webviewUrl = `http://${this._hostname}:${this._proxyPort}`;
     } else if (!this._webviewUrl) {
@@ -524,6 +535,7 @@ export class OpenCodeServer {
   }
 
   private async startProxy(targetUrl?: string): Promise<void> {
+    const bindHost = this.isRemoteEnvironment() ? '0.0.0.0' : '127.0.0.1';
     return new Promise((resolve) => {
       this.proxy = http.createServer((req, res) => {
         if (req.method === 'OPTIONS') {
