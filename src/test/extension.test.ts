@@ -130,9 +130,12 @@ suite('Remote environment tests', () => {
   test('resolveWebviewUrl uses asExternalUri in remote environment', async () => {
     const server = new OpenCodeServer(context);
     const env = vscode.env as any;
-    const originalRemoteName = env.remoteName;
     const originalAsExternalUri = env.asExternalUri;
-    env.remoteName = 'ssh-remote';
+    const originalRemoteNameDescriptor = Object.getOwnPropertyDescriptor(env, 'remoteName');
+    Object.defineProperty(env, 'remoteName', {
+      configurable: true,
+      get: () => 'ssh-remote',
+    });
     env.asExternalUri = async (uri: vscode.Uri) => {
       return vscode.Uri.parse(`https://remote-host${uri.path}`);
     };
@@ -143,7 +146,11 @@ suite('Remote environment tests', () => {
       await server['resolveWebviewUrl']();
       assert.strictEqual(server.webviewUrl, 'https://remote-host/');
     } finally {
-      env.remoteName = originalRemoteName;
+      if (originalRemoteNameDescriptor) {
+        Object.defineProperty(env, 'remoteName', originalRemoteNameDescriptor);
+      } else {
+        delete env.remoteName;
+      }
       env.asExternalUri = originalAsExternalUri;
     }
   });
@@ -151,9 +158,12 @@ suite('Remote environment tests', () => {
   test('resolveWebviewUrl falls back to local proxy URL when asExternalUri fails', async () => {
     const server = new OpenCodeServer(context);
     const env = vscode.env as any;
-    const originalRemoteName = env.remoteName;
     const originalAsExternalUri = env.asExternalUri;
-    env.remoteName = 'ssh-remote';
+    const originalRemoteNameDescriptor = Object.getOwnPropertyDescriptor(env, 'remoteName');
+    Object.defineProperty(env, 'remoteName', {
+      configurable: true,
+      get: () => 'ssh-remote',
+    });
     env.asExternalUri = async () => {
       throw new Error('unable to resolve');
     };
@@ -164,7 +174,11 @@ suite('Remote environment tests', () => {
       await server['resolveWebviewUrl']();
       assert.strictEqual(server.webviewUrl, 'http://127.0.0.1:54321');
     } finally {
-      env.remoteName = originalRemoteName;
+      if (originalRemoteNameDescriptor) {
+        Object.defineProperty(env, 'remoteName', originalRemoteNameDescriptor);
+      } else {
+        delete env.remoteName;
+      }
       env.asExternalUri = originalAsExternalUri;
     }
   });
