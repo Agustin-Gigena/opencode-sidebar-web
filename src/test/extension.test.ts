@@ -120,6 +120,56 @@ suite('DetectExistingServer', () => {
   });
 });
 
+suite('Remote environment tests', () => {
+  let context: vscode.ExtensionContext;
+
+  setup(() => {
+    context = createMockContext();
+  });
+
+  test('resolveWebviewUrl uses asExternalUri in remote environment', async () => {
+    const server = new OpenCodeServer(context);
+    const env = vscode.env as any;
+    const originalRemoteName = env.remoteName;
+    const originalAsExternalUri = env.asExternalUri;
+    env.remoteName = 'ssh-remote';
+    env.asExternalUri = async (uri: vscode.Uri) => {
+      return vscode.Uri.parse(`https://remote-host${uri.path}`);
+    };
+
+    try {
+      server['_proxyPort'] = 12345;
+      server['_webviewUrl'] = '';
+      await server['resolveWebviewUrl']();
+      assert.strictEqual(server.webviewUrl, 'https://remote-host/');
+    } finally {
+      env.remoteName = originalRemoteName;
+      env.asExternalUri = originalAsExternalUri;
+    }
+  });
+
+  test('resolveWebviewUrl falls back to local proxy URL when asExternalUri fails', async () => {
+    const server = new OpenCodeServer(context);
+    const env = vscode.env as any;
+    const originalRemoteName = env.remoteName;
+    const originalAsExternalUri = env.asExternalUri;
+    env.remoteName = 'ssh-remote';
+    env.asExternalUri = async () => {
+      throw new Error('unable to resolve');
+    };
+
+    try {
+      server['_proxyPort'] = 54321;
+      server['_webviewUrl'] = '';
+      await server['resolveWebviewUrl']();
+      assert.strictEqual(server.webviewUrl, 'http://127.0.0.1:54321');
+    } finally {
+      env.remoteName = originalRemoteName;
+      env.asExternalUri = originalAsExternalUri;
+    }
+  });
+});
+
 suite('Start and stop server', function () {
   this.timeout(60000);
   let context: vscode.ExtensionContext;

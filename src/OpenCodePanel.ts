@@ -176,7 +176,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
       "style-src 'self' 'unsafe-inline';",
       "script-src 'self' 'unsafe-inline';",
       `img-src 'self' http://127.0.0.1:* http://localhost:* ${webviewOrigin || 'https:'} data:;`,
-      `connect-src 'self' http://127.0.0.1:* http://localhost:* ${webviewOrigin || 'https:'} data:;`,
+      `connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* ${webviewOrigin || 'https:'} data:;`,
       "font-src 'self' http://127.0.0.1:* data:;",
     ].join(' ');
 
@@ -289,6 +289,31 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     }
 
     syncTheme();
+    let frameLoaded = false;
+    const frame = document.getElementById('ocFrame');
+    const overlay = document.getElementById('overlay');
+
+    function showLoadError() {
+      if (frameLoaded) { return; }
+      overlay.classList.remove('hidden');
+      overlay.innerHTML =
+        '<div class="error-icon">⚠</div>' +
+        '<span class="error-msg">OpenCode failed to load</span>' +
+        '<span class="error-detail">The server is running, but the iframe could not be displayed. Check the logs for connection issues.</span>' +
+        '<div class="btn-row"><button class="secondary" onclick="showLogs()">View Logs</button></div>';
+    }
+
+    if (frame) {
+      frame.addEventListener('load', () => {
+        frameLoaded = true;
+        if (overlay) {
+          overlay.classList.add('hidden');
+        }
+      });
+      frame.addEventListener('error', () => showLoadError());
+    }
+
+    setTimeout(() => showLoadError(), 8000);
     const obs = new MutationObserver(syncTheme);
     obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
   </script>

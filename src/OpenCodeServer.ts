@@ -247,8 +247,17 @@ export class OpenCodeServer {
     } else {
       const localUri = vscode.Uri.parse(detected.url);
       if (this.isRemoteEnvironment()) {
-        const external = await vscode.env.asExternalUri(localUri);
-        this._webviewUrl = external.toString();
+        try {
+          const external = await vscode.env.asExternalUri(localUri);
+          this._webviewUrl = external.toString();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this._outputChannel.appendLine(
+            `asExternalUri failed on detected server URL: ${message}. Falling back to proxy.`
+          );
+          await this.startProxy();
+          await this.resolveWebviewUrl();
+        }
       } else {
         this._webviewUrl = detected.url;
       }
@@ -303,21 +312,29 @@ export class OpenCodeServer {
 
   private async resolveWebviewUrl(): Promise<void> {
     if (this.isRemoteEnvironment() && this._proxyPort > 0) {
-      const localUri = vscode.Uri.parse(`http://${this._hostname}:${this._proxyPort}`);
-      try {
-        this._outputChannel.appendLine(
-          `Resolving remote URI for proxy at ${localUri.toString()}`
-        );
-        const external = await vscode.env.asExternalUri(localUri);
-        this._webviewUrl = external.toString();
-        this._outputChannel.appendLine(`Resolved external URI: ${this._webviewUrl}`);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        this._outputChannel.appendLine(
-          `Failed to resolve external URI: ${message}. Falling back to local proxy URL.`
-        );
-        this._webviewUrl = `http://${this._hostname}:${this._proxyPort}`;
+      const candidates = [
+        `http://localhost:${this._proxyPort}`,
+        `http://127.0.0.1:${this._proxyPort}`,
+      ];
+      for (const uriText of candidates) {
+        const localUri = vscode.Uri.parse(uriText);
+        try {
+          this._outputChannel.appendLine(`Resolving remote URI for proxy at ${uriText}`);
+          const external = await vscode.env.asExternalUri(localUri);
+          this._webviewUrl = external.toString();
+          this._outputChannel.appendLine(`Resolved external URI: ${this._webviewUrl}`);
+          return;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          this._outputChannel.appendLine(
+            `asExternalUri failed for ${uriText}: ${message}`
+          );
+        }
       }
+      this._outputChannel.appendLine(
+        'Failed to resolve external URI for remote proxy; keeping local proxy URL.'
+      );
+      this._webviewUrl = `http://127.0.0.1:${this._proxyPort}`;
     } else if (this._proxyPort > 0) {
       this._webviewUrl = `http://${this._hostname}:${this._proxyPort}`;
     } else if (!this._webviewUrl) {
@@ -556,6 +573,20 @@ export class OpenCodeServer {
           headers: { ...req.headers, host: `${this._hostname}:${this._port}` },
         }, (proxyRes) => {
           const headers = { ...proxyRes.headers };
+          if (typeof headers.location === 'string') {
+            try {
+              const locationUrl = new URL(headers.location);
+              const upstreamUrl = new URL(upstream);
+              if (locationUrl.origin === upstreamUrl.origin) {
+                const proxyOrigin = this._webviewUrl
+                  ? new URL(this._webviewUrl).origin
+                  : `http://${bindHost}:${this._proxyPort}`;
+                headers.location = `${proxyOrigin}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
+              }
+            } catch {
+              // If parsing fails, do not rewrite location.
+            }
+          }
           for (const h of CSP_HEADERS) { delete headers[h]; }
           res.writeHead(proxyRes.statusCode || 200, {
             ...headers,
@@ -571,13 +602,48 @@ export class OpenCodeServer {
         req.pipe(proxyReq);
       });
 
-      this.proxy.listen(0, '127.0.0.1', () => {
+      this.proxy.on('upgrade', (req, socket, head) => {
+        const upstream = targetUrl || this.serverUrl;
+        const target = `${upstream}${req.url}`;
+        const proxyReq = http.request(target, {
+          method: req.method,
+          headers: { ...req.headers, host: `${this._hostname}:${this._port}` },
+        });
+
+        proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+          socket.write(`HTTP/${proxyRes.httpVersion} ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n`);
+          for (const [name, value] of Object.entries(proxyRes.headers)) {
+            if (value) {
+              if (Array.isArray(value)) {
+                for (const v of value) {
+                  socket.write(`${name}: ${v}\r\n`);
+                }
+              } else {
+                socket.write(`${name}: ${value}\r\n`);
+              }
+            }
+          }
+          socket.write('\r\n');
+          if (proxyHead?.length) {
+            proxySocket.write(proxyHead);
+          }
+          proxySocket.pipe(socket).pipe(proxySocket);
+        });
+
+        proxyReq.on('error', () => {
+          socket.end();
+        });
+
+        proxyReq.end();
+      });
+
+      this.proxy.listen(0, bindHost, () => {
         const addr = this.proxy!.address();
         if (addr && typeof addr === 'object') {
           this._proxyPort = addr.port;
         }
         this._outputChannel.appendLine(
-          `Proxy listening on http://127.0.0.1:${this._proxyPort}`
+          `Proxy listening on http://${bindHost}:${this._proxyPort}`
         );
         resolve();
       });
