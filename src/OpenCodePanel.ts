@@ -131,8 +131,15 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     }
 
     let overlayContent: string;
-    if (this._server.isRunning) {
+    const hasWebviewUrl = Boolean(webviewUrl);
+    if (this._server.isRunning && hasWebviewUrl) {
       overlayContent = '';
+    } else if (this._server.isRunning && !hasWebviewUrl) {
+      overlayContent =
+        `<div class="error-icon">\u26A0</div>` +
+        `<span class="error-msg">Server started but no webview URL is available</span>` +
+        `<span class="error-detail">Check the extension output logs for remote URL resolution errors.</span>` +
+        `<div class="btn-row"><button class="secondary" onclick="showLogs()">View Logs</button></div>`;
     } else if (this._isStarting) {
       overlayContent =
         '<div class="spinner"></div><span>Starting OpenCode server...</span>';
@@ -159,7 +166,7 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     const webviewOrigin = webviewUrl
       ? (() => { try { return new URL(webviewUrl).origin; } catch { return ''; } })()
       : '';
-    const baseCsp = "default-src 'self' http://127.0.0.1:* http://localhost:*;";
+    const baseCsp = "default-src 'self' http://127.0.0.1:* http://localhost:* https:;";
     const frameSrc = webviewOrigin
       ? `frame-src http://127.0.0.1:* http://localhost:* ${webviewOrigin};`
       : "frame-src http://127.0.0.1:* http://localhost:*;";
@@ -242,9 +249,9 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
   </div>
 
   <iframe id="ocFrame" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-    ${webviewUrl ? `src="${webviewUrl}"` : ''}></iframe>
+    ${webviewUrl ? `src="${webviewUrl}"` : ''} title="OpenCode"></iframe>
 
-  <div id="overlay" class="overlay ${webviewUrl ? 'hidden' : ''}">
+  <div id="overlay" class="overlay ${hasWebviewUrl ? 'hidden' : ''}">
     ${webviewUrl ? '' : overlayContent}
   </div>
 

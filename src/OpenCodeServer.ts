@@ -91,7 +91,8 @@ export class OpenCodeServer {
       cancellable: false,
     }, async (progress) => {
       return new Promise<void>((resolve, reject) => {
-        npmProcess = spawn('npm', [
+        const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+        npmProcess = spawn(npmCommand, [
           'install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'
         ], {
           cwd: this._extensionPath,
@@ -150,7 +151,11 @@ export class OpenCodeServer {
         npmProcess.on('error', (err) => {
           completed = true;
           clearInterval(timer);
-          reject(new Error(`npm install failed: ${err.message}`));
+          const processError = err as NodeJS.ErrnoException;
+          const message = processError.code === 'ENOENT'
+            ? `npm install failed: ${processError.message}. Please ensure npm is installed and available in PATH.`
+            : `npm install failed: ${processError.message}`;
+          reject(new Error(message));
         });
       });
     });
@@ -234,9 +239,9 @@ export class OpenCodeServer {
     this._processExited = false;
     this._processError = '';
 
-    const needsProxy = await this.checkNeedsProxy(detected);
+    const needsProxy = this.isRemoteEnvironment() || await this.checkNeedsProxy(detected);
     if (needsProxy) {
-      this._outputChannel.appendLine('Server has frame-blocking headers, starting proxy...');
+      this._outputChannel.appendLine('Using proxy for existing server connection...');
       await this.startProxy();
       await this.resolveWebviewUrl();
     } else {
@@ -256,35 +261,44 @@ export class OpenCodeServer {
   }
 
   private async checkNeedsProxy(detected: DetectedServer): Promise<boolean> {
-    try {
-      const headers: Record<string, string> = {};
-      if (detected.password) {
-        headers['Authorization'] = `Basic ${Buffer.from(
-          `opencode:${detected.password}`
-        ).toString('base64')}`;
-      }
-      const resp = await fetch(`${detected.url}${HEALTH_ENDPOINT}`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(3000),
-        headers: Object.keys(headers).length ? headers : undefined,
-      });
+    const urls = [
+      `${detected.url}${HEALTH_ENDPOINT}`,
+      detected.url.endsWith('/') ? detected.url : `${detected.url}/`,
+    ];
 
-      const xfo = resp.headers.get('x-frame-options');
-      if (xfo) {
-        this._outputChannel.appendLine(`Detected X-Frame-Options: ${xfo}`);
-        return true;
-      }
+    for (const url of urls) {
+      try {
+        const headers: Record<string, string> = {};
+        if (detected.password) {
+          headers['Authorization'] = `Basic ${Buffer.from(
+            `opencode:${detected.password}`
+          ).toString('base64')}`;
+        }
+        const resp = await fetch(url, {
+          method: 'GET',
+          signal: AbortSignal.timeout(3000),
+          headers: Object.keys(headers).length ? headers : undefined,
+        });
 
-      const csp = resp.headers.get('content-security-policy');
-      if (csp && csp.toLowerCase().includes('frame-ancestors')) {
-        this._outputChannel.appendLine(`Detected CSP frame-ancestors`);
-        return true;
-      }
+        const xfo = resp.headers.get('x-frame-options');
+        if (xfo) {
+          this._outputChannel.appendLine(`Detected X-Frame-Options on ${url}: ${xfo}`);
+          return true;
+        }
 
-      return false;
-    } catch {
-      return true;
+        const csp = resp.headers.get('content-security-policy');
+        if (csp && csp.toLowerCase().includes('frame-ancestors')) {
+          this._outputChannel.appendLine(`Detected CSP frame-ancestors on ${url}`);
+          return true;
+        }
+
+        return false;
+      } catch (err) {
+        this._outputChannel.appendLine(`Could not inspect headers on ${url}: ${(err as Error).message}`);
+      }
     }
+
+    return true;
   }
 
   private async resolveWebviewUrl(): Promise<void> {
