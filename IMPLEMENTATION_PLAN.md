@@ -388,6 +388,7 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 2026-06-26 | Phase 10 Task 5: Create GitHubAPI.ts | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/GitHubAPI.ts` |
 | 2026-06-26 | Phase 10 Task 4: Extract WindowsPlatformManager to separate file | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/WindowsPlatformManager.ts`, `src/platform/PlatformManager.ts` |
 | 2026-06-26 | Phase 10 Task 6: Add opencodeVersion setting | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `package.json` |
+| 2026-06-26 | Phase 10 Task 7: Rewrite OpenCodeServer.start() with PlatformManager + GitHubAPI | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/OpenCodeServer.ts` |
 
 ## Summary
 
@@ -402,8 +403,8 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 7 | Documentation | ✅ Done | 4/4 |
 | 8 | Quality Gate Verification | ✅ Done | 4/4 |
 | 9 | **Bug Fixes — API Endpoints** | ✅ Done | 15/15 |
-| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 6/12 |
-| | **Total** | | **69 checklist items (62/69 done)** |
+| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 7/12 |
+| | **Total** | | **70 checklist items (63/70 done)** |
 
 ## Known Existing Work
 
@@ -431,7 +432,7 @@ Replaces npm-based binary management with on-demand download from GitHub Release
 | 4 | Implement `WindowsPlatformManager` (incl. AVX2 detection via `IsProcessorFeaturePresent`) | `src/platform/WindowsPlatformManager.ts` | ✅ |
 | 5 | Create `GitHubAPI.ts` — release lookup, asset download, streaming progress | `src/GitHubAPI.ts` | ✅ |
 | 6 | Add `opencode-sidebar-web.opencodeVersion` setting | `package.json` | ✅ |
-| 7 | Rewrite `OpenCodeServer.start()` — use `PlatformManager` + `GitHubAPI` | `src/OpenCodeServer.ts` | ⬜ |
+| 7 | Rewrite `OpenCodeServer.start()` — use `PlatformManager` + `GitHubAPI` | `src/OpenCodeServer.ts` | ✅ |
 | 8 | Remove legacy: `installBinary()`, `findBinaryPath()`, `detectExistingServer()`, `ensureBundledBinary()`, `Pseudoterminal`, `execFile` imports | `src/OpenCodeServer.ts` | ⬜ |
 | 9 | Remove settings `devcontainerMode`, `autoInstallInDevcontainer` + command `installBinary` | `package.json`, `src/extension.ts` | ⬜ |
 | 10 | Remove dependency `opencode-ai`; add `adm-zip` + `modern-tar` | `package.json` | ⬜ |
