@@ -391,6 +391,7 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 2026-06-26 | Phase 10 Task 7: Rewrite OpenCodeServer.start() with PlatformManager + GitHubAPI | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/OpenCodeServer.ts` |
 | 2026-06-26 | Phase 10 Task 8: Remove legacy binary management code | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/OpenCodeServer.ts`, `src/extension.ts`, `src/OpenCodePanel.ts`, `src/test/extension.test.ts` |
 | 2026-06-26 | Phase 10 Task 9: Remove devcontainer settings and installBinary command | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `package.json`, `src/extension.ts`, `src/test/extension.test.ts` |
+| 2026-06-26 | Phase 10 Task 10: Remove opencode-ai dependency | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `package.json` |
 
 ## Summary
 
@@ -405,8 +406,8 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 7 | Documentation | ✅ Done | 4/4 |
 | 8 | Quality Gate Verification | ✅ Done | 4/4 |
 | 9 | **Bug Fixes — API Endpoints** | ✅ Done | 15/15 |
-| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 9/12 |
-| | **Total** | | **70 checklist items (65/70 done)** |
+| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 10/12 |
+| | **Total** | | **70 checklist items (66/70 done)** |
 
 ## Known Existing Work
 
@@ -437,7 +438,7 @@ Replaces npm-based binary management with on-demand download from GitHub Release
 | 7 | Rewrite `OpenCodeServer.start()` — use `PlatformManager` + `GitHubAPI` | `src/OpenCodeServer.ts` | ✅ |
 | 8 | Remove legacy: `installBinary()`, `findBinaryPath()`, `detectExistingServer()`, `ensureBundledBinary()`, `Pseudoterminal`, `execFile` imports | `src/OpenCodeServer.ts` | ✅ |
 | 9 | Remove settings `devcontainerMode`, `autoInstallInDevcontainer` + command `installBinary` | `package.json`, `src/extension.ts`, `src/test/extension.test.ts` | ✅ |
-| 10 | Remove dependency `opencode-ai`; add `adm-zip` + `modern-tar` | `package.json` | ⬜ |
+| 10 | Remove dependency `opencode-ai`; add `adm-zip` + `modern-tar` | `package.json` | ✅ |
 | 11a | Tests: remove legacy tests (findBinaryPath, detectExistingServer, installBinary, ensureBundledBinary) | `src/test/extension.test.ts` | ⬜ |
 | 11b | Tests: add `PlatformManager` unit tests (each impl: getBinaryName, getAssetName, getArchiveFormat, AVX2/baseline selection) | `src/test/platform.test.ts` | ⬜ |
 | 11c | Tests: add `GitHubAPI` unit tests (mock fetch: release lookup, asset download, progress, rate-limit 403 handling) | `src/test/github-api.test.ts` | ⬜ |
