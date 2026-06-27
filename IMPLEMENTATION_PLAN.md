@@ -1,8 +1,8 @@
-# Implementation Plan (Editor Integration Design)
+# Implementation Plan
 
-**Status:** ✅ **All phases and bug fixes complete** (57/57 checklist items done, 5 bugs fixed)
+**Status:** 🟡 **Phase 10 in progress** (Embedded Binary via GitHub Releases)
 
-**Last Updated:** 2026-05-26
+**Last Updated:** 2026-06-26
 
 **Primary Spec:** `specs/architecture/2026-05-26-editor-integration-design.md`
 
@@ -382,6 +382,7 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 2026-05-26 | **9.1 verification**: `/session/:id/prompt_async` | `POST /session/:id/prompt_async` with `parts` body | ✅ 204 (empty) | — |
 | 2026-05-26 | **9.1 verification**: `/session/:id/prompt` | `POST /session/:id/prompt` | ⚠️ Returns SPA HTML (not JSON API) | — |
 | 2026-05-26 | **9.1 verification**: `/tui/append-prompt` | `POST /tui/append-prompt` with `{ text }` | ✅ 200, returns `true` | — |
+| 2026-06-26 | Phase 10 Task 1: PlatformManager interface + factory | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/PlatformManager.ts`, `tsconfig.json`, `package.json` |
 
 ## Summary
 
@@ -396,7 +397,8 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 7 | Documentation | ✅ Done | 4/4 |
 | 8 | Quality Gate Verification | ✅ Done | 4/4 |
 | 9 | **Bug Fixes — API Endpoints** | ✅ Done | 15/15 |
-| | **Total** | | **57 checklist items (57/57 done)** |
+| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 1/12 |
+| | **Total** | | **69 checklist items (58/69 done)** |
 
 ## Known Existing Work
 
@@ -407,6 +409,40 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 - **Phase 5** (`src/OpenCodePanel.ts`): `postMessage()` method, `addToChatInput`/`setActiveFile` handlers, `.active-file` status bar element.
 - **Phase 6** (`src/test/editor-integration.test.ts`, `src/test/extension.test.ts`): Tests for all new modules.
 - **Phase 7** (`README.md`): Documentation for all 3 features and the new setting.
+
+## Phase 10 — Embedded Binary via GitHub Releases
+
+**Primary Spec:** `specs/server/2026-06-26-embedded-binary-design.md`
+
+Replaces npm-based binary management with on-demand download from GitHub Releases, cached by version under `globalStorageUri`.
+
+### Checklist
+
+| # | Task | Files | Status |
+|---|------|-------|--------|
+| 1 | Create `PlatformManager` interface + factory | `src/platform/PlatformManager.ts` | ✅ |
+| 2 | Implement `LinuxPlatformManager` (incl. AVX2 detection via `/proc/cpuinfo`, musl detection via `/etc/alpine-release`/`ldd`) | `src/platform/LinuxPlatformManager.ts` | ⬜ |
+| 3 | Implement `MacOSPlatformManager` (incl. AVX2 detection via `sysctl hw.optional.avx2_0`) | `src/platform/MacOSPlatformManager.ts` | ⬜ |
+| 4 | Implement `WindowsPlatformManager` (incl. AVX2 detection via `IsProcessorFeaturePresent`) | `src/platform/WindowsPlatformManager.ts` | ⬜ |
+| 5 | Create `GitHubAPI.ts` — release lookup, asset download, streaming progress | `src/GitHubAPI.ts` | ⬜ |
+| 6 | Add `opencode-sidebar-web.opencodeVersion` setting | `package.json` | ⬜ |
+| 7 | Rewrite `OpenCodeServer.start()` — use `PlatformManager` + `GitHubAPI` | `src/OpenCodeServer.ts` | ⬜ |
+| 8 | Remove legacy: `installBinary()`, `findBinaryPath()`, `detectExistingServer()`, `ensureBundledBinary()`, `Pseudoterminal`, `execFile` imports | `src/OpenCodeServer.ts` | ⬜ |
+| 9 | Remove settings `devcontainerMode`, `autoInstallInDevcontainer` + command `installBinary` | `package.json`, `src/extension.ts` | ⬜ |
+| 10 | Remove dependency `opencode-ai`; add `adm-zip` + `modern-tar` | `package.json` | ⬜ |
+| 11a | Tests: remove legacy tests (findBinaryPath, detectExistingServer, installBinary, ensureBundledBinary) | `src/test/extension.test.ts` | ⬜ |
+| 11b | Tests: add `PlatformManager` unit tests (each impl: getBinaryName, getAssetName, getArchiveFormat, AVX2/baseline selection) | `src/test/platform.test.ts` | ⬜ |
+| 11c | Tests: add `GitHubAPI` unit tests (mock fetch: release lookup, asset download, progress, rate-limit 403 handling) | `src/test/github-api.test.ts` | ⬜ |
+| 11d | Tests: add integration test for new `start()` flow with mocked PlatformManager + GitHubAPI | `src/test/extension.test.ts` | ⬜ |
+| 12 | Update specs: mark `server-detection.md` and `remote-environments.md` as obsoleted | `specs/` | ⬜ |
+
+### Dependencies to install
+
+```bash
+npm install adm-zip modern-tar
+npm uninstall opencode-ai
+npm install -D @types/adm-zip
+```
 
 ## Manual Deployment Tasks
 
