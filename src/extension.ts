@@ -71,19 +71,6 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand('opencode-sidebar-web.installBinary', async () => {
-      const startAction = 'Start Server';
-      const result = await vscode.window.showInformationMessage(
-        'Binary is now downloaded automatically on server start.',
-        startAction
-      );
-      if (result === startAction) {
-        await startServer();
-      }
-    })
-  );
-
   const api = OpenCodeAPI.fromServer(server);
   const codeLensProvider = new CodeLensProvider();
   context.subscriptions.push(

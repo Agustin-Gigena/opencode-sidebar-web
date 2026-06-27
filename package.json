@@ -87,10 +87,6 @@
         "title": "OpenCode: Enfocar panel"
       },
       {
-        "command": "opencode-sidebar-web.installBinary",
-        "title": "OpenCode: Instalar binario opencode"
-      },
-      {
         "command": "opencode-sidebar-web.explainSelection",
         "title": "OpenCode: Explain Selection"
       },
@@ -139,11 +135,6 @@
         {
           "command": "opencode-sidebar-web.restartServer",
           "when": "view == opencode-sidebar-web.view && opencodeSidebarServerRunning",
-          "group": "navigation"
-        },
-        {
-          "command": "opencode-sidebar-web.installBinary",
-          "when": "view == opencode-sidebar-web.view && !opencodeSidebarBinaryInstalled",
           "group": "navigation"
         }
       ],
@@ -225,16 +216,6 @@
             "right"
           ],
           "description": "OpenCode siempre aparece en el secondary sidebar (lado derecho). Esta opción se mantiene por compatibilidad."
-        },
-        "opencode-sidebar-web.devcontainerMode": {
-          "type": "boolean",
-          "default": true,
-          "description": "Detectar automáticamente opencode corriendo en el devcontainer/remoto"
-        },
-        "opencode-sidebar-web.autoInstallInDevcontainer": {
-          "type": "boolean",
-          "default": true,
-          "description": "Instalar automáticamente opencode al activarse en un devcontainer si no está presente"
         },
         "opencode-sidebar-web.opencodeVersion": {
           "type": "string",
