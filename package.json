@@ -236,6 +236,11 @@
           "default": true,
           "description": "Instalar automáticamente opencode al activarse en un devcontainer si no está presente"
         },
+        "opencode-sidebar-web.opencodeVersion": {
+          "type": "string",
+          "default": "latest",
+          "description": "Version of the opencode binary to download from GitHub Releases (e.g. \"1.17.11\", \"latest\")"
+        },
         "opencode-sidebar-web.autoLinkActiveFile": {
           "type": "boolean",
           "default": true,
