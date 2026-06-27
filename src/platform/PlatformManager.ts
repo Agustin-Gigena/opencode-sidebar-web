@@ -1,6 +1,7 @@
 import { platform, arch } from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
+import { LinuxPlatformManager } from './LinuxPlatformManager.js';
 
 export interface PlatformManager {
   getBinaryName(): string;
@@ -64,75 +65,6 @@ function hasAvx2(): boolean {
     }
   }
   return false;
-}
-
-function isMusl(): boolean {
-  try {
-    if (fs.existsSync('/etc/alpine-release')) {
-      return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  try {
-    const { execSync } = require('child_process');
-    const out = execSync('ldd --version 2>&1 || true', {
-      encoding: 'utf8',
-      timeout: 3000,
-    });
-    return out.toLowerCase().includes('musl');
-  } catch {
-    return false;
-  }
-}
-
-class LinuxPlatformManager implements PlatformManager {
-  private cpu: string;
-  private _avx2: boolean;
-  private _musl: boolean;
-
-  constructor(cpu: string) {
-    this.cpu = cpu;
-    this._avx2 = hasAvx2();
-    this._musl = isMusl();
-  }
-
-  getBinaryName(): string {
-    return 'opencode';
-  }
-
-  getAssetName(_tag: string): string {
-    let base: string;
-    if (this.cpu === 'arm64') {
-      base = 'opencode-linux-arm64';
-    } else {
-      base = this._avx2 ? 'opencode-linux-x64' : 'opencode-linux-x64-baseline';
-    }
-    if (this._musl) {
-      base += '-musl';
-    }
-    return `${base}.tar.gz`;
-  }
-
-  getArchiveFormat(): 'zip' | 'tar.gz' {
-    return 'tar.gz';
-  }
-
-  async extractBinary(archiveBuffer: ArrayBuffer, targetDir: string): Promise<void> {
-    const { pipeline } = await import('stream/promises');
-    const { createGunzip } = await import('zlib');
-    const { unpackTar } = await import('modern-tar/fs');
-    const { Readable } = await import('stream');
-    await pipeline(
-      Readable.from(Buffer.from(archiveBuffer)),
-      createGunzip(),
-      unpackTar(targetDir)
-    );
-  }
-
-  async makeExecutable(binaryPath: string): Promise<void> {
-    await fs.promises.chmod(binaryPath, 0o755);
-  }
 }
 
 class MacOSPlatformManager implements PlatformManager {
@@ -208,7 +140,7 @@ export function createPlatformManager(): PlatformManager {
 
   switch (plat) {
     case 'linux':
-      return new LinuxPlatformManager(cpu);
+      return new LinuxPlatformManager(cpu, hasAvx2());
     case 'darwin':
       return new MacOSPlatformManager(cpu);
     case 'win32':
