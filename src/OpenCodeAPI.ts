@@ -76,7 +76,7 @@ export class OpenCodeAPI {
     if (contentType.includes('text/html')) {
       const body = await response.text().catch(() => '');
       throw new Error(
-        `Server returned HTML instead of JSON for "${context}" — the endpoint may not exist. Response: ${body.slice(0, 200)}`
+        `Server returned HTML (Content-Type: ${contentType}) instead of JSON for "${context}" — the endpoint may not exist. Response: ${body.slice(0, 200)}`
       );
     }
 

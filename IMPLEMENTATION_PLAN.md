@@ -392,6 +392,8 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 2026-06-26 | Phase 10 Task 8: Remove legacy binary management code | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/OpenCodeServer.ts`, `src/extension.ts`, `src/OpenCodePanel.ts`, `src/test/extension.test.ts` |
 | 2026-06-26 | Phase 10 Task 9: Remove devcontainer settings and installBinary command | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `package.json`, `src/extension.ts`, `src/test/extension.test.ts` |
 | 2026-06-26 | Phase 10 Task 10: Remove opencode-ai dependency | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `package.json` |
+| 2026-06-26 | Phase 10 Task 11a: Remove legacy tests | `src/test/extension.test.ts` | ✅ None found/removed | `src/test/extension.test.ts` |
+| 2026-06-26 | Phase 10 Task 11b: PlatformManager unit tests | `src/test/platform.test.ts` | ✅ All pass | `src/test/platform.test.ts` |
 
 ## Summary
 
@@ -439,8 +441,8 @@ Replaces npm-based binary management with on-demand download from GitHub Release
 | 8 | Remove legacy: `installBinary()`, `findBinaryPath()`, `detectExistingServer()`, `ensureBundledBinary()`, `Pseudoterminal`, `execFile` imports | `src/OpenCodeServer.ts` | ✅ |
 | 9 | Remove settings `devcontainerMode`, `autoInstallInDevcontainer` + command `installBinary` | `package.json`, `src/extension.ts`, `src/test/extension.test.ts` | ✅ |
 | 10 | Remove dependency `opencode-ai`; add `adm-zip` + `modern-tar` | `package.json` | ✅ |
-| 11a | Tests: remove legacy tests (findBinaryPath, detectExistingServer, installBinary, ensureBundledBinary) | `src/test/extension.test.ts` | ⬜ |
-| 11b | Tests: add `PlatformManager` unit tests (each impl: getBinaryName, getAssetName, getArchiveFormat, AVX2/baseline selection) | `src/test/platform.test.ts` | ⬜ |
+| 11a | Tests: remove legacy tests (findBinaryPath, detectExistingServer, installBinary, ensureBundledBinary) | `src/test/extension.test.ts` | ✅ |
+| 11b | Tests: add `PlatformManager` unit tests (each impl: getBinaryName, getAssetName, getArchiveFormat, AVX2/baseline selection) | `src/test/platform.test.ts` | ✅ |
 | 11c | Tests: add `GitHubAPI` unit tests (mock fetch: release lookup, asset download, progress, rate-limit 403 handling) | `src/test/github-api.test.ts` | ⬜ |
 | 11d | Tests: add integration test for new `start()` flow with mocked PlatformManager + GitHubAPI | `src/test/extension.test.ts` | ⬜ |
 | 12 | Update specs: mark `server-detection.md` and `remote-environments.md` as obsoleted | `specs/` | ⬜ |

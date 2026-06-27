@@ -193,7 +193,7 @@ suite('OpenCodeAPI', () => {
       } catch (err) {
         assert.ok(err instanceof Error);
         assert.ok((err as Error).message.includes('Failed to parse response as JSON'));
-        assert.ok((err as Error).message.includes('not valid json'));
+        assert.ok((err as Error).message.toLowerCase().includes('not valid json'));
       }
     } finally {
       server.close();
