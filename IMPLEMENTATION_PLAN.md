@@ -385,6 +385,7 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 2026-06-26 | Phase 10 Task 1: PlatformManager interface + factory | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/PlatformManager.ts`, `tsconfig.json`, `package.json` |
 | 2026-06-26 | Phase 10 Task 2: Extract LinuxPlatformManager to separate file | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/LinuxPlatformManager.ts`, `src/platform/PlatformManager.ts` |
 | 2026-06-26 | Phase 10 Task 3: Extract MacOSPlatformManager to separate file | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/MacOSPlatformManager.ts`, `src/platform/PlatformManager.ts` |
+| 2026-06-26 | Phase 10 Task 5: Create GitHubAPI.ts | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/GitHubAPI.ts` |
 
 ## Summary
 
@@ -399,8 +400,8 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 7 | Documentation | ✅ Done | 4/4 |
 | 8 | Quality Gate Verification | ✅ Done | 4/4 |
 | 9 | **Bug Fixes — API Endpoints** | ✅ Done | 15/15 |
-| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 3/12 |
-| | **Total** | | **69 checklist items (60/69 done)** |
+| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 4/12 |
+| | **Total** | | **69 checklist items (61/69 done)** |
 
 ## Known Existing Work
 
@@ -426,7 +427,7 @@ Replaces npm-based binary management with on-demand download from GitHub Release
 | 2 | Implement `LinuxPlatformManager` (incl. AVX2 detection via `/proc/cpuinfo`, musl detection via `/etc/alpine-release`/`ldd`) | `src/platform/LinuxPlatformManager.ts` | ✅ |
 | 3 | Implement `MacOSPlatformManager` (incl. AVX2 detection via `sysctl hw.optional.avx2_0`) | `src/platform/MacOSPlatformManager.ts` | ✅ |
 | 4 | Implement `WindowsPlatformManager` (incl. AVX2 detection via `IsProcessorFeaturePresent`) | `src/platform/WindowsPlatformManager.ts` | ⬜ |
-| 5 | Create `GitHubAPI.ts` — release lookup, asset download, streaming progress | `src/GitHubAPI.ts` | ⬜ |
+| 5 | Create `GitHubAPI.ts` — release lookup, asset download, streaming progress | `src/GitHubAPI.ts` | ✅ |
 | 6 | Add `opencode-sidebar-web.opencodeVersion` setting | `package.json` | ⬜ |
 | 7 | Rewrite `OpenCodeServer.start()` — use `PlatformManager` + `GitHubAPI` | `src/OpenCodeServer.ts` | ⬜ |
 | 8 | Remove legacy: `installBinary()`, `findBinaryPath()`, `detectExistingServer()`, `ensureBundledBinary()`, `Pseudoterminal`, `execFile` imports | `src/OpenCodeServer.ts` | ⬜ |
