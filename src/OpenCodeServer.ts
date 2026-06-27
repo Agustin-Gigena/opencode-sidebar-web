@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
 import { platform, arch } from 'os';
+import { createPlatformManager } from './platform/PlatformManager.js';
+import { GitHubAPI } from './GitHubAPI.js';
 
 const CSP_HEADERS = [
   'content-security-policy',
@@ -521,35 +523,55 @@ export class OpenCodeServer {
     this._hostname = vscode.workspace.getConfiguration('opencode-sidebar-web')
       .get('hostname', '127.0.0.1');
 
-    const devcontainerMode = vscode.workspace.getConfiguration('opencode-sidebar-web')
-      .get('devcontainerMode', true);
+    const pm = createPlatformManager();
+    const gh = new GitHubAPI();
 
-    if (this.isRemoteEnvironment() && devcontainerMode) {
-      const existing = await this.detectExistingServer();
-      if (existing) {
-        await this.connectToExisting(existing);
-        return;
-      }
-      this._outputChannel.appendLine(
-        'No existing OpenCode server detected, will start a new one...'
-      );
+    const versionSetting = vscode.workspace.getConfiguration('opencode-sidebar-web')
+      .get('opencodeVersion', 'latest') as string;
+
+    const cacheDir = path.join(this._storagePath, 'opencode-bin', versionSetting);
+    const binaryPath = path.join(cacheDir, pm.getBinaryName());
+
+    if (!fs.existsSync(binaryPath) || !this.isExecutableFile(binaryPath)) {
+      this._outputChannel.appendLine(`OpenCode binary not cached at ${binaryPath}, downloading...`);
+
+      await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: 'Downloading OpenCode...',
+        cancellable: false,
+      }, async (progress) => {
+        progress.report({ message: 'Resolving version...' });
+
+        const release = await gh.getRelease(versionSetting);
+        const assetName = pm.getAssetName(release.tag_name);
+        const asset = gh.getAsset(release, assetName);
+
+        fs.mkdirSync(cacheDir, { recursive: true });
+
+        progress.report({ message: `Downloading ${assetName}...` });
+
+        const archiveBuffer = await gh.download(
+          asset.browser_download_url,
+          (downloaded, total) => {
+            const pct = total > 0 ? Math.round((downloaded / total) * 100) : 0;
+            progress.report({ message: `Downloading... ${pct}%` });
+          }
+        );
+
+        progress.report({ message: 'Extracting...' });
+        await pm.extractBinary(archiveBuffer, cacheDir);
+        await pm.makeExecutable(binaryPath);
+
+        this._outputChannel.appendLine(`OpenCode binary downloaded and cached at ${binaryPath}`);
+      });
     }
 
-    let binary = this.findBinaryPath();
-    if (!binary) {
-      this._outputChannel.appendLine('No bundled binary was found; attempting to prepare it from the extension package...');
-      binary = this.ensureBundledBinary();
-    }
-
-    if (!binary) {
-      this._outputChannel.appendLine('OpenCode binary could not be prepared from the extension package.');
-      throw new Error(
-        `OpenCode binary could not be prepared for this environment. The extension package should already include it.`
-      );
+    if (!fs.existsSync(binaryPath) || !this.isExecutableFile(binaryPath)) {
+      throw new Error(`OpenCode binary not found at ${binaryPath}`);
     }
 
     this._outputChannel.appendLine(`Starting OpenCode server...`);
-    this._outputChannel.appendLine(`Binary: ${binary}`);
+    this._outputChannel.appendLine(`Binary: ${binaryPath}`);
 
     const activeUri = vscode.window.activeTextEditor?.document.uri;
     const activeWorkspace = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
@@ -561,10 +583,10 @@ export class OpenCodeServer {
     const args = ['serve', '--port', '0', '--hostname', this._hostname];
 
     this._outputChannel.appendLine(
-      `Run manually to debug: ${binary} ${args.join(' ')}${workspaceFolder ? ` (cwd: ${workspaceFolder})` : ''}`
+      `Run manually to debug: ${binaryPath} ${args.join(' ')}${workspaceFolder ? ` (cwd: ${workspaceFolder})` : ''}`
     );
 
-    this.process = spawn(binary, args, {
+    this.process = spawn(binaryPath, args, {
       cwd: workspaceFolder,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
