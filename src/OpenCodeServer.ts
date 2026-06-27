@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
-import { ChildProcess, exec, execFile, execSync, spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as http from 'http';
-import { platform, arch } from 'os';
 import { createPlatformManager } from './platform/PlatformManager.js';
 import { GitHubAPI } from './GitHubAPI.js';
 
@@ -14,14 +13,7 @@ const CSP_HEADERS = [
 ];
 
 const PORT_REGEX = /listening on https?:\/\/[^:]+:(\d+)/i;
-const OPENCODE_PACKAGE = 'opencode-ai';
-const OPENCODE_DEFAULT_PORT = 4096;
 const HEALTH_ENDPOINT = '/global/health';
-
-interface DetectedServer {
-  url: string;
-  password?: string;
-}
 
 export class OpenCodeServer {
   private process: ChildProcess | null = null;
@@ -40,7 +32,6 @@ export class OpenCodeServer {
   readonly onDidChangeStatus = this._onDidChangeStatus.event;
   private _extensionPath: string;
   private _storagePath: string;
-  private _existingServerUrl: string | null = null;
   private _webviewUrl: string = '';
 
   constructor(context: vscode.ExtensionContext) {
@@ -59,305 +50,8 @@ export class OpenCodeServer {
     this.updateStatusBar();
   }
 
-  isBinaryInstalled(): boolean {
-    return this.findBinaryPath() !== undefined;
-  }
-
-  private _installTerminal: vscode.Terminal | null = null;
-
-  private getNodeCompatibilityMessage(): string | undefined {
-    const major = parseInt(process.versions.node.split('.')[0], 10);
-    if (major < 18) {
-      return `OpenCode installation requires Node.js 18+ (recommended 22). Current runtime is ${process.version}.`;
-    }
-    return undefined;
-  }
-
-  private getPackageManagerInvocation(): { command: string; args: string[] } {
-    const installArgs = ['install', `${OPENCODE_PACKAGE}@latest`, '--no-audit', '--no-fund'];
-    const npmExecPath = process.env.npm_execpath;
-    if (npmExecPath) {
-      return {
-        command: process.execPath,
-        args: [npmExecPath, ...installArgs],
-      };
-    }
-
-    return {
-      command: process.platform === 'win32' ? 'npm.cmd' : 'npm',
-      args: installArgs,
-    };
-  }
-
-  async installBinary(): Promise<void> {
-    if (this._installTerminal) {
-      this._installTerminal.dispose();
-      this._installTerminal = null;
-    }
-
-    const writeEmitter = new vscode.EventEmitter<string>();
-    let npmProcess: ChildProcess | null = null;
-
-    const pty: vscode.Pseudoterminal = {
-      onDidWrite: writeEmitter.event,
-      open: () => {
-        writeEmitter.fire('Installing opencode-ai...\r\n\r\n');
-      },
-      close: () => {
-        if (npmProcess && npmProcess.exitCode === null) {
-          npmProcess.kill('SIGTERM');
-        }
-      }
-    };
-
-    this._installTerminal = vscode.window.createTerminal({
-      name: 'OpenCode Install',
-      pty,
-    });
-    this._installTerminal.show();
-
-    await vscode.window.withProgress({
-      location: vscode.ProgressLocation.Notification,
-      title: 'Installing OpenCode...',
-      cancellable: false,
-    }, async (progress) => {
-      return new Promise<void>((resolve, reject) => {
-        let completed = false;
-        let timer: NodeJS.Timeout | undefined;
-
-        const compatibilityMessage = this.getNodeCompatibilityMessage();
-        if (compatibilityMessage) {
-          completed = true;
-          if (timer) {
-            clearInterval(timer);
-          }
-          reject(new Error(compatibilityMessage));
-          return;
-        }
-
-        const { command, args } = this.getPackageManagerInvocation();
-        this._outputChannel.appendLine(`Running install command: ${command} ${args.join(' ')}`);
-
-        const nodeExecutable = process.execPath;
-        const nodeVersion = process.versions.node;
-        this._outputChannel.appendLine(`Using Node ${nodeVersion} from ${nodeExecutable}`);
-
-        npmProcess = execFile(command, args, {
-          cwd: this._extensionPath,
-          windowsHide: true,
-          env: process.env,
-        });
-
-        const startTime = Date.now();
-        const ESTIMATED_DURATION = 30000;
-        let lineCount = 0;
-
-        const barWidth = 30;
-        const renderBar = (pct: number) => {
-          const filled = Math.round((pct / 100) * barWidth);
-          return `${Math.round(pct)}% [${'#'.repeat(filled)}${' '.repeat(barWidth - filled)}]`;
-        };
-
-        const updateProgress = () => {
-          if (completed) { return; }
-          const elapsed = Date.now() - startTime;
-          const timePct = Math.min(elapsed / ESTIMATED_DURATION * 100, 90);
-          const linePct = Math.min(lineCount / 25 * 100, 90);
-          const pct = Math.max(timePct, linePct);
-          const bar = renderBar(pct);
-          progress.report({ message: bar });
-          writeEmitter.fire(`\r${bar}`);
-        };
-
-        timer = setInterval(updateProgress, 200);
-
-        npmProcess.stdout?.on('data', (data: Buffer) => {
-          writeEmitter.fire(data.toString());
-        });
-
-        npmProcess.stderr?.on('data', (data: Buffer) => {
-          const text = data.toString();
-          writeEmitter.fire(text);
-          lineCount += (text.match(/\n/g) || []).length;
-          updateProgress();
-        });
-
-        npmProcess.on('exit', (code) => {
-          completed = true;
-          clearInterval(timer);
-          if (code === 0) {
-            const bar = renderBar(100);
-            progress.report({ message: bar });
-            writeEmitter.fire(`\r${bar}\r\n\r\n`);
-            writeEmitter.fire('Installation complete!\r\n');
-            resolve();
-          } else {
-            reject(new Error(`npm install exited with code ${code}. Check terminal for details.`));
-          }
-        });
-
-        npmProcess.on('error', (err) => {
-          completed = true;
-          clearInterval(timer);
-          const processError = err as NodeJS.ErrnoException;
-          const message = processError.code === 'ENOENT'
-            ? `npm install failed: ${processError.message}. Please ensure npm is installed and available in PATH.`
-            : `npm install failed: ${processError.message}`;
-          this._outputChannel.appendLine(`Install process error: ${message}`);
-          reject(new Error(message));
-        });
-      });
-    });
-  }
-
   isRemoteEnvironment(): boolean {
     return vscode.env.remoteName !== undefined;
-  }
-
-  async detectExistingServer(): Promise<DetectedServer | null> {
-    const envPassword = process.env.OPENCODE_SERVER_PASSWORD;
-    const results: Array<{ url: string; password?: string }> = [];
-
-    // 1. Check env vars
-    const envUrl = process.env.OPENCODE_URL;
-    const envPort = process.env.OPENCODE_PORT;
-    if (envUrl) {
-      results.push({ url: envUrl, password: envPassword || undefined });
-    }
-    if (envPort) {
-      results.push({ url: `http://127.0.0.1:${envPort}`, password: envPassword || undefined });
-    }
-
-    // 2. Try pgrep to find running opencode process
-    try {
-      const pgrepOut = execSync('pgrep -x opencode', { encoding: 'utf8', timeout: 5000 });
-      const pids = pgrepOut.trim().split('\n').filter(Boolean);
-      for (const pid of pids) {
-        try {
-          const cmdline = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
-          const args = cmdline.split('\0');
-          let port = OPENCODE_DEFAULT_PORT;
-          let hostname = '127.0.0.1';
-          for (let i = 0; i < args.length; i++) {
-            if (args[i] === '--port' && i + 1 < args.length) {port = parseInt(args[i + 1], 10);}
-            if (args[i] === '--hostname' && i + 1 < args.length) {hostname = args[i + 1];}
-          }
-          if (port !== 0) {
-            results.push({ url: `http://${hostname}:${port}`, password: envPassword || undefined });
-          }
-        } catch { /* skip unreadable process */ }
-      }
-    } catch { /* pgrep not available or no process */ }
-
-    // 3. Only try the default port if there is a real local binary and the port is likely to be serving.
-    const packagedBinary = this.findPackagedBinaryPath();
-    if (packagedBinary) {
-      results.push({ url: `http://127.0.0.1:${OPENCODE_DEFAULT_PORT}`, password: envPassword || undefined });
-    }
-
-    // Health check each candidate, return first that responds
-    for (const candidate of results) {
-      try {
-        const headers: Record<string, string> = {};
-        if (candidate.password) {
-          headers['Authorization'] = `Basic ${Buffer.from(
-            `opencode:${candidate.password}`
-          ).toString('base64')}`;
-        }
-        const resp = await fetch(`${candidate.url}${HEALTH_ENDPOINT}`, {
-          signal: AbortSignal.timeout(2000),
-          headers: Object.keys(headers).length ? headers : undefined,
-        });
-        if (resp.ok) {
-          this._outputChannel.appendLine(`Detected existing server at ${candidate.url}`);
-          return candidate;
-        }
-      } catch { /* try next */ }
-    }
-
-    return null;
-  }
-
-  async connectToExisting(detected: DetectedServer): Promise<void> {
-    this._existingServerUrl = detected.url;
-    this._outputChannel.appendLine(`Connecting to existing OpenCode server at ${detected.url}`);
-
-    const parsedUrl = new URL(detected.url);
-    this._hostname = parsedUrl.hostname;
-    this._port = parseInt(parsedUrl.port, 10);
-    this.process = null;
-    this._processExited = false;
-    this._processError = '';
-
-    const needsProxy = this.isRemoteEnvironment() || await this.checkNeedsProxy(detected);
-    if (needsProxy) {
-      this._outputChannel.appendLine('Using proxy for existing server connection...');
-      await this.startProxy();
-      await this.resolveWebviewUrl();
-    } else {
-      const localUri = vscode.Uri.parse(detected.url);
-      if (this.isRemoteEnvironment()) {
-        try {
-          const external = await vscode.env.asExternalUri(localUri);
-          this._webviewUrl = external.toString();
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          this._outputChannel.appendLine(
-            `asExternalUri failed on detected server URL: ${message}. Falling back to proxy.`
-          );
-          await this.startProxy();
-          await this.resolveWebviewUrl();
-        }
-      } else {
-        this._webviewUrl = detected.url;
-      }
-    }
-
-    this._isRunning = true;
-    this.updateStatusBar();
-    this._onDidChangeStatus.fire(true);
-    this._outputChannel.appendLine(`Connected to existing server at ${detected.url}`);
-  }
-
-  private async checkNeedsProxy(detected: DetectedServer): Promise<boolean> {
-    const urls = [
-      `${detected.url}${HEALTH_ENDPOINT}`,
-      detected.url.endsWith('/') ? detected.url : `${detected.url}/`,
-    ];
-
-    for (const url of urls) {
-      try {
-        const headers: Record<string, string> = {};
-        if (detected.password) {
-          headers['Authorization'] = `Basic ${Buffer.from(
-            `opencode:${detected.password}`
-          ).toString('base64')}`;
-        }
-        const resp = await fetch(url, {
-          method: 'GET',
-          signal: AbortSignal.timeout(3000),
-          headers: Object.keys(headers).length ? headers : undefined,
-        });
-
-        const xfo = resp.headers.get('x-frame-options');
-        if (xfo) {
-          this._outputChannel.appendLine(`Detected X-Frame-Options on ${url}: ${xfo}`);
-          return true;
-        }
-
-        const csp = resp.headers.get('content-security-policy');
-        if (csp && csp.toLowerCase().includes('frame-ancestors')) {
-          this._outputChannel.appendLine(`Detected CSP frame-ancestors on ${url}`);
-          return true;
-        }
-
-        return false;
-      } catch (err) {
-        this._outputChannel.appendLine(`Could not inspect headers on ${url}: ${(err as Error).message}`);
-      }
-    }
-
-    return true;
   }
 
   private async resolveWebviewUrl(): Promise<void> {
@@ -392,29 +86,6 @@ export class OpenCodeServer {
     }
   }
 
-  private findPackagedBinaryPath(): string | undefined {
-    const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
-    const extModules = path.join(this._extensionPath, 'node_modules');
-    const candidates = [
-      path.join(extModules, 'opencode-ai', 'bin', binaryName),
-      path.join(extModules, 'opencode-ai', 'bin', '.opencode'),
-      path.join(extModules, '.bin', 'opencode'),
-      path.join(extModules, '.bin', 'opencode.cmd'),
-      path.join(extModules, 'opencode-ai', 'bin', 'opencode'),
-    ];
-
-    for (const c of candidates) {
-      try {
-        if (fs.existsSync(c)) {
-          this._outputChannel.appendLine(`Using packaged binary: ${c}`);
-          return c;
-        }
-      } catch { /* next */ }
-    }
-
-    return undefined;
-  }
-
   private isExecutableFile(filePath: string): boolean {
     try {
       fs.accessSync(filePath, fs.constants.X_OK);
@@ -422,79 +93,6 @@ export class OpenCodeServer {
     } catch {
       return false;
     }
-  }
-
-  private ensureBundledBinary(): string | undefined {
-    const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
-    const targetDir = path.join(this._storagePath, 'bin');
-    const targetPath = path.join(targetDir, binaryName);
-
-    const packagedBinary = this.findPackagedBinaryPath();
-    if (packagedBinary) {
-      try {
-        fs.mkdirSync(targetDir, { recursive: true });
-        if (packagedBinary !== targetPath) {
-          fs.copyFileSync(packagedBinary, targetPath);
-        }
-        if (platform() !== 'win32' && !targetPath.endsWith('.exe')) {
-          fs.chmodSync(targetPath, 0o755);
-        }
-        if (fs.existsSync(targetPath) && this.isExecutableFile(targetPath)) {
-          this._outputChannel.appendLine(`Prepared bundled binary: ${targetPath}`);
-          return targetPath;
-        }
-      } catch {
-        // fall back to the packaged path directly
-      }
-    }
-
-    return packagedBinary;
-  }
-
-  private findBinaryPath(): string | undefined {
-    const bundledBinary = this.ensureBundledBinary();
-    if (bundledBinary) {
-      return bundledBinary;
-    }
-
-    const binaryName = platform() === 'win32' ? 'opencode.exe' : 'opencode';
-
-    try {
-      const which = execSync(
-        platform() === 'win32' ? `where ${binaryName}` : `which ${binaryName}`,
-        { encoding: 'utf8', timeout: 3000 }
-      );
-      const found = which.split('\n')[0].trim();
-      if (found) { return found; }
-    } catch { /* not in PATH */ }
-
-    const extModules = path.join(this._extensionPath, 'node_modules');
-
-    const hidden = path.join(extModules, 'opencode-ai', 'bin', '.opencode');
-    try { fs.accessSync(hidden, fs.constants.X_OK); return hidden; } catch { /* next */ }
-
-    const plat = platform() === 'win32' ? 'windows' : platform() === 'darwin' ? 'darwin' : 'linux';
-    const archName = arch();
-    const candidates = [
-      path.join(extModules, `opencode-${plat}-${archName}`, 'bin', binaryName),
-      path.join(extModules, `opencode-${plat}-${archName}-baseline`, 'bin', binaryName),
-      path.join(extModules, `opencode-${plat}-${archName}-musl`, 'bin', binaryName),
-      path.join(extModules, `opencode-${plat}-${archName}-baseline-musl`, 'bin', binaryName),
-    ];
-
-    for (const c of candidates) {
-      try { fs.accessSync(c, fs.constants.X_OK); return c; } catch { /* next */ }
-    }
-
-    const wrapper = path.join(extModules, '.bin', 'opencode');
-    if (fs.existsSync(wrapper)) { return wrapper; }
-    const winWrapper = wrapper + '.cmd';
-    if (fs.existsSync(winWrapper)) { return winWrapper; }
-
-    const aiWrapper = path.join(extModules, 'opencode-ai', 'bin', 'opencode');
-    if (fs.existsSync(aiWrapper)) { return aiWrapper; }
-
-    return undefined;
   }
 
   get port(): number { return this._port; }
@@ -507,8 +105,6 @@ export class OpenCodeServer {
   get lastError(): string { return this._processError; }
   get lastExitCode(): number | null { return this._processExitCode; }
   get outputChannel(): vscode.OutputChannel { return this._outputChannel; }
-  get isConnectedToExisting(): boolean { return this._existingServerUrl !== null; }
-  get installTerminal(): vscode.Terminal | null { return this._installTerminal; }
 
   async start(): Promise<void> {
     if (this._isRunning) { return; }
@@ -517,7 +113,6 @@ export class OpenCodeServer {
     this._processError = '';
     this._outputBuffer = '';
     this._port = 0;
-    this._existingServerUrl = null;
     this._webviewUrl = '';
 
     this._hostname = vscode.workspace.getConfiguration('opencode-sidebar-web')
@@ -798,16 +393,6 @@ export class OpenCodeServer {
 
   async stop(): Promise<void> {
     if (!this._isRunning) { return; }
-
-    if (this._existingServerUrl) {
-      this._outputChannel.appendLine('Disconnecting from existing server...');
-      this.stopProxy();
-      this._existingServerUrl = null;
-      this._webviewUrl = '';
-      this.cleanup();
-      this._outputChannel.appendLine('Disconnected from existing server');
-      return;
-    }
 
     this._outputChannel.appendLine('Stopping OpenCode server...');
 

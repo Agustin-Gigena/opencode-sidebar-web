@@ -121,11 +121,8 @@ export class OpenCodePanel implements vscode.WebviewViewProvider {
     let portLabel = '';
     if (this._server.isRunning) {
       statusColor = '#4ec94e';
-      if (this._server.isConnectedToExisting) {
-        portLabel = ' (existing)';
-      }
       const displayPort = this._server.proxyPort || this._server.port;
-      statusText = `Connected \u25CF  port ${displayPort}${portLabel}`;
+      statusText = `Connected \u25CF  port ${displayPort}`;
     } else if (this._isStarting) {
       statusColor = '#e5c07b';
       statusText = 'Starting...';

@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { OpenCodeServer } from '../OpenCodeServer';
-import { createMockContext, createMockServer, withEnvAsync } from './test-utils';
+import { createMockContext } from './test-utils';
 
 suite('Extension Test Suite', () => {
   vscode.window.showInformationMessage('Start all tests.');
@@ -35,14 +35,6 @@ suite('OpenCodeServer', () => {
     context = createMockContext();
   });
 
-  test('findBinaryPath searches system PATH as first fallback', () => {
-    const server = new OpenCodeServer(context);
-    if (server.isBinaryInstalled()) {
-      const path = server['findBinaryPath']();
-      assert.ok(path !== undefined, 'Binary path should be found');
-    }
-  });
-
   test('Server constructor accepts mock context', () => {
     const server = new OpenCodeServer(context);
     assert.ok(server instanceof OpenCodeServer);
@@ -54,78 +46,13 @@ suite('OpenCodeServer', () => {
     assert.strictEqual(server.isRemoteEnvironment(), false);
   });
 
-  test('isBinaryInstalled returns boolean without throwing', () => {
-    const server = new OpenCodeServer(context);
-    assert.strictEqual(typeof server.isBinaryInstalled(), 'boolean');
-  });
-
-  test('isConnectedToExisting returns false initially', () => {
-    const server = new OpenCodeServer(context);
-    assert.strictEqual(server.isConnectedToExisting, false);
-  });
-
   test('webviewUrl getter does not throw when not running', () => {
     const server = new OpenCodeServer(context);
     assert.strictEqual(typeof server.webviewUrl, 'string');
   });
 });
 
-suite('DetectExistingServer', () => {
-  let context: vscode.ExtensionContext;
 
-  setup(() => {
-    context = createMockContext();
-  });
-
-  test('detectExistingServer does not throw and returns result or null', async () => {
-    const server = new OpenCodeServer(context);
-    const result = await server.detectExistingServer();
-    // Should not throw
-    if (result === null) {
-      assert.strictEqual(result, null);
-    } else {
-      assert.ok(result.url.startsWith('http://'), 'URL should be valid');
-    }
-  });
-
-  test('detectExistingServer with unused port env var does not throw', async () => {
-    const server = new OpenCodeServer(context);
-    await withEnvAsync(
-      { OPENCODE_PORT: '19999' },
-      async () => server.detectExistingServer()
-    );
-    // Should not throw regardless of what's found
-  });
-
-  test('detects server via OPENCODE_URL env var', async () => {
-    const mockSrv = await createMockServer(18791, {});
-    try {
-      const server = new OpenCodeServer(context);
-      const result = await withEnvAsync(
-        { OPENCODE_URL: 'http://127.0.0.1:18791' },
-        async () => server.detectExistingServer()
-      );
-      assert.ok(result !== null, 'Should detect the mock server via OPENCODE_URL');
-      assert.strictEqual(result!.url, 'http://127.0.0.1:18791');
-    } finally {
-      mockSrv.close();
-    }
-  });
-
-  test('detects server via OPENCODE_PORT env var', async () => {
-    const mockSrv = await createMockServer(18792, {});
-    try {
-      const server = new OpenCodeServer(context);
-      const result = await withEnvAsync(
-        { OPENCODE_PORT: '18792' },
-        async () => server.detectExistingServer()
-      );
-      assert.ok(result !== null, 'Should detect the mock server via OPENCODE_PORT');
-    } finally {
-      mockSrv.close();
-    }
-  });
-});
 
 suite('Remote environment tests', () => {
   let context: vscode.ExtensionContext;

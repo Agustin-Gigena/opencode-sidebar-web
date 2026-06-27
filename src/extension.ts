@@ -12,58 +12,10 @@ export async function activate(context: vscode.ExtensionContext) {
   server = new OpenCodeServer(context);
   panel = new OpenCodePanel(context.extensionUri, server, startServer);
   vscode.commands.executeCommand('setContext', 'opencodeSidebarServerRunning', false);
-  vscode.commands.executeCommand('setContext', 'opencodeSidebarBinaryInstalled', server.isBinaryInstalled());
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(OpenCodePanel.viewType, panel)
   );
-
-  const devcontainerMode = vscode.workspace.getConfiguration('opencode-sidebar-web')
-    .get('devcontainerMode', true);
-
-  if (server.isRemoteEnvironment() && devcontainerMode) {
-    const existing = await server.detectExistingServer();
-    if (existing) {
-      await server.connectToExisting(existing);
-      panel?.render();
-    } else if (!server.isBinaryInstalled()) {
-      const autoInstall = vscode.workspace.getConfiguration('opencode-sidebar-web')
-        .get('autoInstallInDevcontainer', true);
-      if (autoInstall) {
-        try {
-          await server.installBinary();
-          vscode.commands.executeCommand('setContext', 'opencodeSidebarBinaryInstalled', true);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Unknown error';
-          const viewTerminal = 'View Terminal';
-          const result = await vscode.window.showErrorMessage(
-            `Auto-install failed: ${msg}`, viewTerminal
-          );
-          if (result === viewTerminal) { server.installTerminal?.show(); }
-        }
-      }
-    }
-  } else if (!server.isBinaryInstalled()) {
-    const action = await vscode.window.showInformationMessage(
-      'OpenCode binary not found. Install it now?',
-      'Install', 'View Details'
-    );
-    if (action === 'View Details') {
-      server.outputChannel.show();
-    } else if (action === 'Install') {
-      try {
-        await server!.installBinary();
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        const viewTerminal = 'View Terminal';
-        const result = await vscode.window.showErrorMessage(
-          `Installation failed: ${msg}`, viewTerminal
-        );
-        if (result === viewTerminal) {server!.installTerminal?.show();}
-        throw err;
-      }
-    }
-  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand('opencode-sidebar-web.openPanel', async () => {
@@ -121,25 +73,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('opencode-sidebar-web.installBinary', async () => {
-      if (server!.isBinaryInstalled()) {
-        const action = await vscode.window.showInformationMessage(
-          'OpenCode is already installed. Reinstall?',
-          'Reinstall', 'Cancel'
-        );
-        if (action !== 'Reinstall') { return; }
-      }
-      try {
-        await server!.installBinary();
-        vscode.commands.executeCommand('setContext', 'opencodeSidebarBinaryInstalled', true);
-        vscode.window.showInformationMessage('OpenCode binary installed successfully.');
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        const viewTerminal = 'View Terminal';
-        const result = await vscode.window.showErrorMessage(
-          `Installation failed: ${msg}`, viewTerminal
-        );
-        if (result === viewTerminal) { server!.installTerminal?.show(); }
-        throw err;
+      const startAction = 'Start Server';
+      const result = await vscode.window.showInformationMessage(
+        'Binary is now downloaded automatically on server start.',
+        startAction
+      );
+      if (result === startAction) {
+        await startServer();
       }
     })
   );
