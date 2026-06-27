@@ -387,6 +387,7 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 2026-06-26 | Phase 10 Task 3: Extract MacOSPlatformManager to separate file | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/MacOSPlatformManager.ts`, `src/platform/PlatformManager.ts` |
 | 2026-06-26 | Phase 10 Task 5: Create GitHubAPI.ts | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/GitHubAPI.ts` |
 | 2026-06-26 | Phase 10 Task 4: Extract WindowsPlatformManager to separate file | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `src/platform/WindowsPlatformManager.ts`, `src/platform/PlatformManager.ts` |
+| 2026-06-26 | Phase 10 Task 6: Add opencodeVersion setting | `npm run compile && npm run lint && npm run esbuild` | ✅ All pass | `package.json` |
 
 ## Summary
 
@@ -401,7 +402,7 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 7 | Documentation | ✅ Done | 4/4 |
 | 8 | Quality Gate Verification | ✅ Done | 4/4 |
 | 9 | **Bug Fixes — API Endpoints** | ✅ Done | 15/15 |
-| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 5/12 |
+| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 6/12 |
 | | **Total** | | **69 checklist items (62/69 done)** |
 
 ## Known Existing Work
@@ -429,7 +430,7 @@ Replaces npm-based binary management with on-demand download from GitHub Release
 | 3 | Implement `MacOSPlatformManager` (incl. AVX2 detection via `sysctl hw.optional.avx2_0`) | `src/platform/MacOSPlatformManager.ts` | ✅ |
 | 4 | Implement `WindowsPlatformManager` (incl. AVX2 detection via `IsProcessorFeaturePresent`) | `src/platform/WindowsPlatformManager.ts` | ✅ |
 | 5 | Create `GitHubAPI.ts` — release lookup, asset download, streaming progress | `src/GitHubAPI.ts` | ✅ |
-| 6 | Add `opencode-sidebar-web.opencodeVersion` setting | `package.json` | ⬜ |
+| 6 | Add `opencode-sidebar-web.opencodeVersion` setting | `package.json` | ✅ |
 | 7 | Rewrite `OpenCodeServer.start()` — use `PlatformManager` + `GitHubAPI` | `src/OpenCodeServer.ts` | ⬜ |
 | 8 | Remove legacy: `installBinary()`, `findBinaryPath()`, `detectExistingServer()`, `ensureBundledBinary()`, `Pseudoterminal`, `execFile` imports | `src/OpenCodeServer.ts` | ⬜ |
 | 9 | Remove settings `devcontainerMode`, `autoInstallInDevcontainer` + command `installBinary` | `package.json`, `src/extension.ts` | ⬜ |
