@@ -254,7 +254,6 @@
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
-    "modern-tar": "^0.7.6",
-    "opencode-ai": "^1.17.11"
+    "modern-tar": "^0.7.6"
   }
 }
