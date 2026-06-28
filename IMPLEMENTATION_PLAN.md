@@ -1,6 +1,6 @@
 # Implementation Plan
 
-**Status:** 🟡 **Phase 10 in progress** (Embedded Binary via GitHub Releases)
+**Status:** ✅ **All phases complete** (70/70 checklist items done)
 
 **Last Updated:** 2026-06-27
 
@@ -408,8 +408,8 @@ POST /session/:id/prompt  ⚠️ NOT a JSON API — returns SPA HTML
 | 7 | Documentation | ✅ Done | 4/4 |
 | 8 | Quality Gate Verification | ✅ Done | 4/4 |
 | 9 | **Bug Fixes — API Endpoints** | ✅ Done | 15/15 |
-| 10 | **Embedded Binary via GitHub Releases** | 🟡 In Progress | 10/12 |
-| | **Total** | | **70 checklist items (66/70 done)** |
+| 10 | **Embedded Binary via GitHub Releases** | ✅ Done | 12/12 |
+| | **Total** | | **70 checklist items (70/70 done)** |
 
 ## Known Existing Work
 
@@ -443,9 +443,9 @@ Replaces npm-based binary management with on-demand download from GitHub Release
 | 10 | Remove dependency `opencode-ai`; add `adm-zip` + `modern-tar` | `package.json` | ✅ |
 | 11a | Tests: remove legacy tests (findBinaryPath, detectExistingServer, installBinary, ensureBundledBinary) | `src/test/extension.test.ts` | ✅ |
 | 11b | Tests: add `PlatformManager` unit tests (each impl: getBinaryName, getAssetName, getArchiveFormat, AVX2/baseline selection) | `src/test/platform.test.ts` | ✅ |
-| 11c | Tests: add `GitHubAPI` unit tests (mock fetch: release lookup, asset download, progress, rate-limit 403 handling) | `src/test/github-api.test.ts` | ⬜ |
-| 11d | Tests: add integration test for new `start()` flow with mocked PlatformManager + GitHubAPI | `src/test/extension.test.ts` | ⬜ |
-| 12 | Update specs: mark `server-detection.md` and `remote-environments.md` as obsoleted | `specs/` | ⬜ |
+| 11c | Tests: add `GitHubAPI` unit tests (mock fetch: release lookup, asset download, progress, rate-limit 403 handling) | `src/test/github-api.test.ts` | ✅ |
+| 11d | Tests: add integration test for new `start()` flow with mocked PlatformManager + GitHubAPI | `src/test/extension.test.ts` | ✅ |
+| 12 | Update specs: mark `server-detection.md` and `remote-environments.md` as obsoleted | `specs/` | ✅ |
 
 ### Dependencies to install
 
