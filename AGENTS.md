@@ -32,6 +32,13 @@
 - ESLint + typescript-eslint for linting.
 - esbuild for bundling.
 
+## Branch Strategy
+
+- **Never push directly to `production`.** All changes must go through a pull request.
+- Branch naming: `{base}_{feature}` — e.g. `development_changelog-ai`, `development_fix-auth`
+- `{base}` is semantic (e.g. `development`), not an actual remote branch. Feature branches branch off `production` and PR into `production`.
+- The `changelog.yml` workflow triggers on push to `production`, which happens automatically when a PR merges.
+
 ## Implementation Guidance
 
 - Keep the webview panel implementation clean and well-structured.

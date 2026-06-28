@@ -15,6 +15,7 @@ Design docs and technical specifications for the OpenCode Sidebar Web VS Code ex
 - [operations/extension-lifecycle.md](../operations/extension-lifecycle.md)
 - [operations/development-testing.md](../operations/development-testing.md)
 - [operations/release-workflow.md](../operations/release-workflow.md)
+- [operations/changelog-automation.md](../operations/changelog-automation.md)
 
 ## Server
 

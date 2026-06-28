@@ -12,6 +12,12 @@
       "sourceType": "github",
       "skillPath": "changelog-generator/SKILL.md",
       "computedHash": "0facdb5c491a654e3b0f6d300fb8fa14472d811cb715c632dc2862919b277dae"
+    },
+    "create-pull-request": {
+      "source": "cline/cline",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/create-pull-request/SKILL.md",
+      "computedHash": "d2a0ecdf51b25a15e794156dd2acd179f09783fe92a2ee4f354621fe81ea7313"
     }
   }
 }
