@@ -1,10 +1,5 @@
 import * as vscode from 'vscode';
-import { ChildProcess, spawn } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
 import * as http from 'http';
-import { createPlatformManager } from './platform/PlatformManager.js';
-import { GitHubAPI } from './GitHubAPI.js';
 
 const CSP_HEADERS = [
   'content-security-policy',
@@ -15,8 +10,17 @@ const CSP_HEADERS = [
 const PORT_REGEX = /listening on https?:\/\/[^:]+:(\d+)/i;
 const HEALTH_ENDPOINT = '/global/health';
 
+let OpencodeSDK: any = null;
+
+async function getSDK() {
+  if (!OpencodeSDK) {
+    OpencodeSDK = await import('@opencode-ai/sdk');
+  }
+  return OpencodeSDK;
+}
+
 export class OpenCodeServer {
-  private process: ChildProcess | null = null;
+  private process: { url: string; close(): void } | null = null;
   private proxy: http.Server | null = null;
   private _port: number = 0;
   private _proxyPort: number = 0;
@@ -33,13 +37,13 @@ export class OpenCodeServer {
   private _extensionPath: string;
   private _storagePath: string;
   private _webviewUrl: string = '';
+  private _client: any = null;
 
   constructor(context: vscode.ExtensionContext) {
     this._extensionPath = context.extensionPath;
     this._storagePath = context.globalStorageUri?.fsPath
       || context.storageUri?.fsPath
-      || path.join(context.extensionPath, '.storage');
-    fs.mkdirSync(this._storagePath, { recursive: true });
+      || context.extensionPath;
     this._outputChannel = vscode.window.createOutputChannel('OpenCode Server');
 
     this._statusBarItem = vscode.window.createStatusBarItem(
@@ -50,12 +54,80 @@ export class OpenCodeServer {
     this.updateStatusBar();
   }
 
-  isRemoteEnvironment(): boolean {
-    return vscode.env.remoteName !== undefined;
+  get port(): number { return this._port; }
+  get proxyPort(): number { return this._proxyPort; }
+  get hostname(): string { return this._hostname; }
+  get isRunning(): boolean { return this._isRunning; }
+  get serverUrl(): string { return this.process?.url || `http://${this._hostname}:${this._port}`; }
+  get proxyUrl(): string { return `http://${this._hostname}:${this._proxyPort}`; }
+  get webviewUrl(): string { return this._webviewUrl || this.proxyUrl; }
+  get lastError(): string { return this._processError; }
+  get lastExitCode(): number | null { return this._processExitCode; }
+  get outputChannel(): vscode.OutputChannel { return this._outputChannel; }
+  get client(): any { return this._client; }
+
+  async start(): Promise<void> {
+    if (this._isRunning) { return; }
+
+    this._processExited = false;
+    this._processError = '';
+    this._outputBuffer = '';
+    this._port = 0;
+    this._webviewUrl = '';
+
+    this._hostname = vscode.workspace.getConfiguration('opencode-sidebar-web')
+      .get('hostname', '127.0.0.1');
+
+    // Wait for workspace folder to be available
+    let workspaceFolder: string | undefined;
+    for (let i = 0; i < 10; i++) {
+      const activeUri = vscode.window.activeTextEditor?.document.uri;
+      const activeWorkspace = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
+      workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+        || activeWorkspace?.uri.fsPath
+        || vscode.workspace.workspaceFile?.fsPath
+        || this._extensionPath;
+      if (workspaceFolder) break;
+      await this.sleep(100);
+    }
+    workspaceFolder ||= this._extensionPath;
+
+    this._outputChannel.appendLine(`Starting OpenCode server...`);
+    this._outputChannel.appendLine(`Workspace folder: ${workspaceFolder}`);
+
+    try {
+      const sdk = await getSDK();
+      const { client, server } = await sdk.createOpencode({
+        hostname: this._hostname,
+        port: 0,
+      });
+
+      this._client = client;
+      this.process = server;
+
+      // Extract port from server URL
+      const url = new URL(server.url);
+      this._port = parseInt(url.port, 10);
+      this._outputChannel.appendLine(`OpenCode server started at ${server.url}`);
+
+      // Start proxy
+      await this.startProxy(server.url);
+      await this.resolveWebviewUrl();
+
+      this._isRunning = true;
+      this.updateStatusBar();
+      this._onDidChangeStatus.fire(true);
+      this._outputChannel.appendLine(`Server ready at ${this.serverUrl}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this._processError = message;
+      this._outputChannel.appendLine(`Failed to start OpenCode server: ${message}`);
+      throw err;
+    }
   }
 
   private async resolveWebviewUrl(): Promise<void> {
-    if (this.isRemoteEnvironment() && this._proxyPort > 0) {
+    if (vscode.env.remoteName !== undefined && this._proxyPort > 0) {
       const candidates = [
         `http://localhost:${this._proxyPort}`,
         `http://127.0.0.1:${this._proxyPort}`,
@@ -86,206 +158,8 @@ export class OpenCodeServer {
     }
   }
 
-  private isExecutableFile(filePath: string): boolean {
-    try {
-      fs.accessSync(filePath, fs.constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  get port(): number { return this._port; }
-  get proxyPort(): number { return this._proxyPort; }
-  get hostname(): string { return this._hostname; }
-  get isRunning(): boolean { return this._isRunning; }
-  get serverUrl(): string { return `http://${this._hostname}:${this._port}`; }
-  get proxyUrl(): string { return `http://${this._hostname}:${this._proxyPort}`; }
-  get webviewUrl(): string { return this._webviewUrl || this.proxyUrl; }
-  get lastError(): string { return this._processError; }
-  get lastExitCode(): number | null { return this._processExitCode; }
-  get outputChannel(): vscode.OutputChannel { return this._outputChannel; }
-
-  async start(): Promise<void> {
-    if (this._isRunning) { return; }
-
-    this._processExited = false;
-    this._processError = '';
-    this._outputBuffer = '';
-    this._port = 0;
-    this._webviewUrl = '';
-
-    this._hostname = vscode.workspace.getConfiguration('opencode-sidebar-web')
-      .get('hostname', '127.0.0.1');
-
-    const pm = createPlatformManager();
-    const gh = new GitHubAPI();
-
-    const versionSetting = vscode.workspace.getConfiguration('opencode-sidebar-web')
-      .get('opencodeVersion', 'latest') as string;
-
-    const cacheDir = path.join(this._storagePath, 'opencode-bin', versionSetting);
-    const binaryPath = path.join(cacheDir, pm.getBinaryName());
-
-    if (!fs.existsSync(binaryPath) || !this.isExecutableFile(binaryPath)) {
-      this._outputChannel.appendLine(`OpenCode binary not cached at ${binaryPath}, downloading...`);
-
-      await vscode.window.withProgress({
-        location: vscode.ProgressLocation.Notification,
-        title: 'Downloading OpenCode...',
-        cancellable: false,
-      }, async (progress) => {
-        progress.report({ message: 'Resolving version...' });
-
-        const release = await gh.getRelease(versionSetting);
-        const assetName = pm.getAssetName(release.tag_name);
-        const asset = gh.getAsset(release, assetName);
-
-        fs.mkdirSync(cacheDir, { recursive: true });
-
-        progress.report({ message: `Downloading ${assetName}...` });
-
-        const archiveBuffer = await gh.download(
-          asset.browser_download_url,
-          (downloaded, total) => {
-            const pct = total > 0 ? Math.round((downloaded / total) * 100) : 0;
-            progress.report({ message: `Downloading... ${pct}%` });
-          }
-        );
-
-        progress.report({ message: 'Extracting...' });
-        await pm.extractBinary(archiveBuffer, cacheDir);
-        await pm.makeExecutable(binaryPath);
-
-        this._outputChannel.appendLine(`OpenCode binary downloaded and cached at ${binaryPath}`);
-      });
-    }
-
-    if (!fs.existsSync(binaryPath) || !this.isExecutableFile(binaryPath)) {
-      throw new Error(`OpenCode binary not found at ${binaryPath}`);
-    }
-
-    this._outputChannel.appendLine(`Starting OpenCode server...`);
-    this._outputChannel.appendLine(`Binary: ${binaryPath}`);
-
-    const activeUri = vscode.window.activeTextEditor?.document.uri;
-    const activeWorkspace = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
-    const workspaceFolder = vscode.workspace.workspaceFolders?.find((folder) => folder.uri.fsPath === activeWorkspace?.uri.fsPath)?.uri.fsPath
-      || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-      || vscode.workspace.workspaceFile?.fsPath
-      || this._extensionPath;
-
-    const args = ['serve', '--port', '0', '--hostname', this._hostname];
-
-    this._outputChannel.appendLine(
-      `Run manually to debug: ${binaryPath} ${args.join(' ')}${workspaceFolder ? ` (cwd: ${workspaceFolder})` : ''}`
-    );
-
-    this.process = spawn(binaryPath, args, {
-      cwd: workspaceFolder,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: {
-        ...process.env,
-        OPENCODE_SERVER_PASSWORD: process.env.OPENCODE_SERVER_PASSWORD || '',
-      },
-    });
-
-    this.process.stdout?.on('data', (data: Buffer) => {
-      this.handleOutput(data.toString());
-    });
-    this.process.stderr?.on('data', (data: Buffer) => {
-      this.handleOutput(data.toString());
-    });
-
-    this.process.on('error', (err) => {
-      this._processError = err.message;
-      this._outputChannel.appendLine(`Process error: ${err.message}`);
-      this.cleanup();
-    });
-
-    this.process.on('exit', (code) => {
-      this._processExited = true;
-      this._processExitCode = code;
-      this._outputChannel.appendLine(`Process exited with code ${code}`);
-      this.cleanup();
-    });
-
-    await this.waitForServer();
-    await this.startProxy();
-    await this.resolveWebviewUrl();
-
-    this._isRunning = true;
-    this.updateStatusBar();
-    this._onDidChangeStatus.fire(true);
-    this._outputChannel.appendLine(`Server ready at ${this.serverUrl}`);
-  }
-
-  private handleOutput(text: string): void {
-    this._outputChannel.append(text);
-    this._outputBuffer += text;
-    if (this._outputBuffer.length > 10000) {
-      this._outputBuffer = this._outputBuffer.slice(-5000);
-    }
-
-    if (this._port === 0) {
-      const match = this._outputBuffer.match(PORT_REGEX);
-      if (match) {
-        this._port = parseInt(match[1], 10);
-        this._outputChannel.appendLine(`\nDetected port: ${this._port}`);
-      }
-    }
-  }
-
-  private cleanup(): void {
-    this._isRunning = false;
-    this.process = null;
-    this.stopProxy();
-    this.updateStatusBar();
-    this._onDidChangeStatus.fire(false);
-  }
-
-  private async waitForServer(timeout = 30000): Promise<void> {
-    const start = Date.now();
-
-    while (Date.now() - start < timeout) {
-      if (this._processExited) {
-        const reason = this._processError
-          ? `Error: ${this._processError}`
-          : `Exit code: ${this._processExitCode}`;
-        const lastLog = this._outputBuffer.slice(-300);
-        throw new Error(
-          `Process exited prematurely (${reason}). Last output: ${lastLog}`
-        );
-      }
-
-      if (this._port === 0) {
-        await this.sleep(200);
-        continue;
-      }
-
-      try {
-        const response = await fetch(`${this.serverUrl}${HEALTH_ENDPOINT}`, {
-          signal: AbortSignal.timeout(2000),
-        });
-        if (response.ok) {
-          return;
-        }
-      } catch {
-        await this.sleep(500);
-      }
-    }
-
-    const reason = this._processExited
-      ? 'Process exited before ready'
-      : this._port === 0
-        ? 'Could not detect server port from output'
-        : 'Health check did not respond';
-
-    throw new Error(`Server did not start within timeout (${reason})`);
-  }
-
   private async startProxy(targetUrl?: string): Promise<void> {
-    const bindHost = this.isRemoteEnvironment() ? '0.0.0.0' : '127.0.0.1';
+    const bindHost = vscode.env.remoteName !== undefined ? '0.0.0.0' : '127.0.0.1';
     return new Promise((resolve) => {
       this.proxy = http.createServer((req, res) => {
         if (req.method === 'OPTIONS') {
@@ -397,19 +271,19 @@ export class OpenCodeServer {
     this._outputChannel.appendLine('Stopping OpenCode server...');
 
     try {
-      await fetch(`${this.serverUrl}/instance/dispose`, {
-        method: 'POST', signal: AbortSignal.timeout(5000),
-      });
+      if (this._client) {
+        // The SDK handles session cleanup
+      }
     } catch { /* ignore */ }
+
+    if (this.process) {
+      this.process.close();
+      this.process = null;
+    }
 
     this.stopProxy();
 
-    if (this.process?.pid) {
-      const pid = this.process.pid;
-      try { process.kill(pid, 'SIGTERM'); } catch { /* already dead */ }
-    }
-
-    await this.sleep(1000);
+    await this.sleep(500);
     this.cleanup();
     this._outputChannel.appendLine('Server stopped');
   }
@@ -425,6 +299,14 @@ export class OpenCodeServer {
     this._statusBarItem.dispose();
     this._outputChannel.dispose();
     this._onDidChangeStatus.dispose();
+  }
+
+  private cleanup(): void {
+    this._isRunning = false;
+    this._client = null;
+    this.stopProxy();
+    this.updateStatusBar();
+    this._onDidChangeStatus.fire(false);
   }
 
   private updateStatusBar(): void {

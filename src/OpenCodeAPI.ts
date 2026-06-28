@@ -1,4 +1,5 @@
-import { OpenCodeServer } from './OpenCodeServer';
+import * as vscode from 'vscode';
+import { OpenCodeServer } from './OpenCodeServer.js';
 
 export class ServerNotRunningError extends Error {
   constructor(message?: string) {
@@ -15,103 +16,51 @@ export class AuthError extends Error {
 }
 
 export class OpenCodeAPI {
-  private _password: string | undefined;
+  private _server: OpenCodeServer;
   private _sessionId: string | undefined;
 
-  constructor(private _server: OpenCodeServer) {
-    this._password = process.env.OPENCODE_SERVER_PASSWORD;
+  constructor(server: OpenCodeServer) {
+    this._server = server;
   }
 
-  private get baseUrl(): string {
-    return this._server.serverUrl;
+  private get client(): any {
+    const client = this._server.client;
+    if (!client) {
+      throw new ServerNotRunningError('OpenCode client not initialized');
+    }
+    return client;
   }
 
   private async ensureSession(): Promise<string> {
     if (this._sessionId) { return this._sessionId; }
 
-    this.assertServerRunning();
-
-    const response = await fetch(`${this.baseUrl}/session`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({ title: 'OpenCode Sidebar' }),
-      signal: AbortSignal.timeout(10000),
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    const session = await this.client.session.create({
+      directory: workspaceFolder,
+      title: 'OpenCode Sidebar',
     });
-
-    const data: any = await this.handleResponse(response, 'session.create');
-    this._sessionId = data.id as string;
-    return this._sessionId;
-  }
-
-  private getHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    if (this._password) {
-      headers['Authorization'] = `Basic ${Buffer.from(
-        `opencode:${this._password}`
-      ).toString('base64')}`;
+    const sessionId = session.data?.id;
+    if (!sessionId) {
+      throw new Error('Failed to create session');
     }
-    return headers;
-  }
-
-  private assertServerRunning(): void {
-    if (!this._server.isRunning) {
-      throw new ServerNotRunningError();
-    }
-  }
-
-  private async handleResponse(response: Response, context: string): Promise<any> {
-    if (response.status === 401) {
-      throw new AuthError(`Authentication failed for ${context}`);
-    }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(
-        `OpenCode API error (${context}): ${response.status} ${response.statusText}${body ? ` — ${body.slice(0, 200)}` : ''}`
-      );
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('text/html')) {
-      const body = await response.text().catch(() => '');
-      throw new Error(
-        `Server returned HTML (Content-Type: ${contentType}) instead of JSON for "${context}" — the endpoint may not exist. Response: ${body.slice(0, 200)}`
-      );
-    }
-
-    try {
-      return await response.json();
-    } catch (parseErr) {
-      const body = await response.text().catch(() => '');
-      throw new Error(
-        `Failed to parse response as JSON for "${context}". Content-Type: "${contentType}". Body: ${body.slice(0, 200)}`
-      );
-    }
+    this._sessionId = sessionId;
+    return sessionId;
   }
 
   async complete(code: string, systemPrompt: string): Promise<string> {
     const sessionId = await this.ensureSession();
 
-    const response = await fetch(`${this.baseUrl}/session/${sessionId}/message`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        parts: [{ type: 'text', text: code }],
-        system: systemPrompt,
-      }),
-      signal: AbortSignal.timeout(30000),
-    }).catch((err) => {
-      if (err instanceof TypeError && err.message.includes('fetch')) {
-        throw new ServerNotRunningError(
-          `Cannot reach OpenCode server at ${this.baseUrl} — ${err.message}`
-        );
-      }
-      throw err;
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    const response = await this.client.session.prompt(sessionId, {
+      directory: workspaceFolder,
+      parts: [{ type: 'text', text: code }],
+      system: systemPrompt,
     });
 
-    const data = await this.handleResponse(response, 'complete');
-    return data.parts?.map((p: { text?: string }) => p.text).filter(Boolean).join('\n') || '';
+    return (response.data.parts ?? [])
+      .map((p: { text?: string }) => p.text ?? '')
+      .filter(Boolean)
+      .join('\n');
   }
 
   static fromServer(server: OpenCodeServer): OpenCodeAPI {

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { OpenCodeServer } from './OpenCodeServer';
+import { OpenCodeServer } from './OpenCodeServer.js';
 
 export class OpenCodePanel implements vscode.WebviewViewProvider {
   public static readonly viewType = 'opencode-sidebar-web.view';

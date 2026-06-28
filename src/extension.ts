@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { OpenCodeServer } from './OpenCodeServer';
-import { OpenCodePanel } from './OpenCodePanel';
-import { OpenCodeAPI } from './OpenCodeAPI';
-import { CodeLensProvider } from './CodeLensProvider';
+import { OpenCodeServer } from './OpenCodeServer.js';
+import { OpenCodePanel } from './OpenCodePanel.js';
+import { OpenCodeAPI } from './OpenCodeAPI.js';
+import { CodeLensProvider } from './CodeLensProvider.js';
 
 let server: OpenCodeServer | undefined;
 let panel: OpenCodePanel | undefined;
