@@ -5,3 +5,4 @@ node_modules
 *.vsix
 logs/
 ralph-local.toml
+.storage/
