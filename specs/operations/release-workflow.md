@@ -15,8 +15,8 @@ See [changelog-automation.md](changelog-automation.md) for detailed design.
 ## Branch Strategy
 
 - **Never push directly to `production`.** All changes enter via a pull request.
-- Branch naming: `{base_branch}_{feature}` (e.g. `development_changelog-ai`).
-- Feature branches branch off `development` and PR into `production`.
+- Branch naming: `{base}_{feature}` (e.g. `development_changelog-ai`).
+- `{base}` is semantic (e.g. `development`), not an actual remote branch. Feature branches branch off `production` and PR into `production`.
 - PR merge triggers `changelog.yml` automatically.
 
 ## Release Process

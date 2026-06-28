@@ -11,32 +11,23 @@ This skill guides you through creating a well-structured GitHub pull request. It
 
 All feature branches follow: `{base}_{feature}` — e.g. `development_changelog-ai`, `development_fix-auth`
 
-- **Base** (branch off from): part before the first underscore — e.g. `development`
-- **Target** (PR into): always `production`
-
-Never push directly to `production`. All changes enter via PR.
+- `{base}` is semantic (e.g. `development`), not an actual remote branch.
+- All feature branches branch off `production` and PR into `production`.
+- Never push directly to `production`. All changes enter via PR.
 
 ## Auto-Create Branch (Starting Work)
 
 At the start of any work session, before making any changes:
 
-### 1. Detect the base branch
-
-```bash
-git remote show origin | grep "HEAD branch" | awk '{print $NF}'
-```
-
-Or, if already on a branch matching `{base}_{feature}`, parse the base from the branch name.
-
-### 2. Determine the feature name
+### 1. Determine the feature name
 
 Ask the user or infer from the task. Use kebab-case.
 
-### 3. Create the feature branch
+### 2. Create the feature branch from production
 
 ```bash
 git fetch origin
-git checkout -b {base}_{feature} origin/{base}
+git checkout -b {base}_{feature} origin/production
 git push -u origin {base}_{feature}
 ```
 
@@ -87,16 +78,10 @@ git branch --show-current
 
 Ensure you're not on `production`. If so, run the auto-create branch process above.
 
-### 2. Detect the base branch from the branch name
-
-Parse the base branch from the branch name using the convention `{base}_{feature}`:
-- Extract everything before the first underscore
-- E.g., `development_changelog-ai` → base is `development`
-
-### 3. Analyze recent commits relevant to this PR
+### 2. Analyze recent commits relevant to this PR
 
 ```bash
-git log origin/{base}..HEAD --oneline --no-decorate
+git log origin/production..HEAD --oneline --no-decorate
 ```
 
 Review these commits to understand:
@@ -104,10 +89,10 @@ Review these commits to understand:
 - The scope of the PR (single feature/fix or multiple changes)
 - Whether commits should be squashed or reorganized
 
-### 4. Review the diff
+### 3. Review the diff
 
 ```bash
-git diff origin/{base}..HEAD --stat
+git diff origin/production..HEAD --stat
 ```
 
 This shows which files changed and helps identify the type of change.
@@ -145,15 +130,15 @@ Before creating the PR, consider these best practices:
 
 ### Branch Management
 
-1. **Rebase on latest base** (if needed):
+1. **Rebase on latest production** (if needed):
    ```bash
    git fetch origin
-   git rebase origin/{base}
+   git rebase origin/production
    ```
 
 2. **Squash if appropriate**: If there are many small "WIP" commits, consider interactive rebase:
    ```bash
-   git rebase -i origin/{base}
+   git rebase -i origin/production
    ```
    Only suggest this if commits appear messy and the user is comfortable with rebasing.
 

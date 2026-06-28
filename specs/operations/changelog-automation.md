@@ -6,8 +6,8 @@ AI-powered changelog generation and release workflow. On every push to `producti
 
 ## Branch Strategy
 
-- **Never push directly to `production`.** All changes enter via a PR from a branch named `{base_branch}_{feature}`.
-- Feature branches branch off `development` and PR into `production`.
+- **Never push directly to `production`.** All changes enter via a PR from a branch named `{base}_{feature}`.
+- `{base}` is semantic (e.g. `development`), not an actual remote branch. Feature branches branch off `production` and PR into `production`.
 - PR merge triggers the workflow automatically.
 
 ## Flow
