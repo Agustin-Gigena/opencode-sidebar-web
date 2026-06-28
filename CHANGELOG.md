@@ -12,16 +12,20 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 - Add changelog automation with git-cliff (EN/ES)
 - Install changelog-generator skill
+- Auto-create git tag and trigger release on new changelog version
 
 ### Changed
 
 - Update README with editor integration features
 - Add bilingual changelog with language toggle
 - Add .storage/ to .gitignore
+- Extract Python scripts from workflow to fix YAML heredoc issues
+- Regenerate Unreleased section without Phase/Ralph entries
 
 ### Fixed
 
 - Use bundled opencode binary and active workspace
+- Filter Phase and Ralph commits from changelog
 
 ## [0.7.1] - 2026-05-24
 
