@@ -1,12 +1,10 @@
 name: Update Changelog
 
+# Only triggers via PR merge to production — never push directly to production
 on:
   push:
     branches:
       - production
-    paths-ignore:
-      - "cliff.toml"
-      - "cliff.es.toml"
 
 permissions:
   contents: write

@@ -12,9 +12,16 @@
 
 See [changelog-automation.md](changelog-automation.md) for detailed design.
 
+## Branch Strategy
+
+- **Never push directly to `production`.** All changes enter via a pull request.
+- Branch naming: `{base_branch}_{feature}` (e.g. `development_changelog-ai`).
+- Feature branches branch off `development` and PR into `production`.
+- PR merge triggers `changelog.yml` automatically.
+
 ## Release Process
 
-1. Push to `production` triggers `changelog.yml`.
+1. PR merge to `production` triggers `changelog.yml`.
 2. `git-cliff` generates raw entries from conventional commits.
 3. `scripts/release-ai.py` calls opencode CLI to refine entries, decide SemVer version, and write bilingual changelogs.
 4. If a new version is detected, `release.yml` is triggered.

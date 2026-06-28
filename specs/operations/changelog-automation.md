@@ -4,10 +4,16 @@
 
 AI-powered changelog generation and release workflow. On every push to `production`, a GitHub Actions workflow generates raw changelog entries via `git-cliff`, then an AI agent (opencode CLI) refines the entries by analyzing full commit content, compresses related commits, decides the next SemVer version, and produces bilingual changelogs (EN + ES).
 
+## Branch Strategy
+
+- **Never push directly to `production`.** All changes enter via a PR from a branch named `{base_branch}_{feature}`.
+- Feature branches branch off `development` and PR into `production`.
+- PR merge triggers the workflow automatically.
+
 ## Flow
 
 ```
-Push to production
+PR merge to production
   │
   ├─ 1. git-cliff --unreleased → raw entries (_raw.md)
   │
