@@ -11,7 +11,10 @@ This skill guides you through creating a well-structured GitHub pull request. It
 
 All feature branches follow: `{base}_{feature}` — e.g. `development_changelog-ai`, `development_fix-auth`
 
-The base branch is the part before the first underscore. Never push directly to `production`.
+- **Base** (branch off from): part before the first underscore — e.g. `development`
+- **Target** (PR into): always `production`
+
+Never push directly to `production`. All changes enter via PR.
 
 ## Auto-Create Branch (Starting Work)
 
@@ -187,7 +190,7 @@ When filling out the template:
 
 2. Create the PR using the file:
    ```bash
-   gh pr create --title "PR_TITLE" --body-file /tmp/pr-body.md --base {base}
+   gh pr create --title "PR_TITLE" --body-file /tmp/pr-body.md --base production
    ```
 
 3. Clean up the temporary file:
@@ -197,7 +200,7 @@ When filling out the template:
 
 For draft PRs:
 ```bash
-gh pr create --title "PR_TITLE" --body-file /tmp/pr-body.md --base {base} --draft
+gh pr create --title "PR_TITLE" --body-file /tmp/pr-body.md --base production --draft
 ```
 
 **Why use a file?** Passing complex markdown with newlines, special characters, and checkboxes directly via `--body` is error-prone. The `--body-file` flag handles all content reliably.
@@ -242,4 +245,4 @@ Before finalizing, ensure:
 - [ ] PR description follows the template exactly
 - [ ] Appropriate type of change is selected
 - [ ] Pre-flight checklist items are addressed
-- [ ] PR targets `{base}`, not `production` directly
+- [ ] PR targets `production` (the only merge target)
