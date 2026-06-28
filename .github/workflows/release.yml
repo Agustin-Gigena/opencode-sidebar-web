@@ -7,6 +7,12 @@ on:
         description: "Version to publish (e.g. 1.0.0)"
         required: true
         type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.0.0)"
+        required: true
+        type: string
 
 jobs:
   build:
@@ -45,10 +51,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ inputs.version }}" \
-            --title "v${{ inputs.version }}" \
-            --generate-notes \
-            *.vsix
+          if gh release view "v${{ inputs.version }}" > /dev/null 2>&1; then
+            echo "Release v${{ inputs.version }} already exists, uploading assets"
+            gh release upload "v${{ inputs.version }}" *.vsix --clobber
+          else
+            gh release create "v${{ inputs.version }}" \
+              --title "v${{ inputs.version }}" \
+              --generate-notes \
+              *.vsix
+          fi
 
       - name: Generate summary
         run: |

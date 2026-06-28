@@ -5,16 +5,16 @@ on:
     branches:
       - production
     paths-ignore:
-      - "CHANGELOG.md"
-      - "CHANGELOG.es.md"
       - "cliff.toml"
       - "cliff.es.toml"
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   changelog:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
         with:
           tool: git-cliff
 
-      - name: Detect latest version from CHANGELOG.md
+      - name: Detect version and create tag
         run: python3 scripts/detect-version.py
 
       - name: Generate and merge English changelog
@@ -49,14 +49,14 @@ jobs:
             echo "No new Spanish entries to add"
           fi
 
-      - name: Cleanup temporary tag
-        if: env.CREATED_TAG == 'true'
-        run: |
-          git tag -d "${{ env.TAG_VERSION }}"
-          echo "Temporary tag ${{ env.TAG_VERSION }} removed"
-
       - name: Commit changelogs
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "docs: update CHANGELOG.md and CHANGELOG.es.md"
+          commit_message: "docs: update CHANGELOG.md and CHANGELOG.es.md [skip ci]"
           file_pattern: CHANGELOG.md CHANGELOG.es.md
+
+      - name: Trigger release workflow
+        if: env.NEW_VERSION != ''
+        run: |
+          gh workflow run release.yml --ref production -f version=${{ env.NEW_VERSION }}
+          echo "Release workflow triggered for v${{ env.NEW_VERSION }}"

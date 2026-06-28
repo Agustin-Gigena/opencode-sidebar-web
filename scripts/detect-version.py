@@ -26,20 +26,24 @@ print(f"Latest version from CHANGELOG.md: {tag}")
 result = subprocess.run(["git", "tag", "-l", tag], capture_output=True, text=True)
 tag_exists = bool(result.stdout.strip())
 
-if not tag_exists:
-    print(f"Tag {tag} not found, creating temporary tag")
-    result = subprocess.run(
-        ["git", "log", "--format=%H", "--diff-filter=M", "--", changelog_file],
-        capture_output=True, text=True,
-    )
-    commits = result.stdout.strip().split("\n")
-    commit = commits[0] if commits and commits[0] else "HEAD"
-    subprocess.run(["git", "tag", tag, commit])
-    print(f"Temporary tag {tag} created at {commit}")
-
-    env_file = os.environ.get("GITHUB_ENV")
-    if env_file:
-        with open(env_file, "a") as f:
-            f.write(f"CREATED_TAG=true\nTAG_VERSION={tag}\n")
-else:
+if tag_exists:
     print(f"Tag {tag} already exists")
+    sys.exit(0)
+
+print(f"Tag {tag} not found, creating tag")
+result = subprocess.run(
+    ["git", "log", "--format=%H", "--diff-filter=M", "--", changelog_file],
+    capture_output=True, text=True,
+)
+commits = result.stdout.strip().split("\n")
+commit = commits[0] if commits and commits[0] else "HEAD"
+subprocess.run(["git", "tag", tag, commit], check=True)
+print(f"Tag {tag} created at {commit}")
+
+subprocess.run(["git", "push", "origin", tag], check=True)
+print(f"Tag {tag} pushed")
+
+env_file = os.environ.get("GITHUB_ENV")
+if env_file:
+    with open(env_file, "a") as f:
+        f.write(f"NEW_VERSION={version}\n")
