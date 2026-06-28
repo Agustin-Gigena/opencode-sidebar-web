@@ -3,10 +3,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 export function createMockContext(): vscode.ExtensionContext {
+  const extPath = path.resolve(__dirname, '..', '..');
   return {
     subscriptions: [],
-    extensionPath: path.resolve(__dirname, '..', '..'),
-    extensionUri: vscode.Uri.file(path.resolve(__dirname, '..', '..')),
+    extensionPath: extPath,
+    extensionUri: vscode.Uri.file(extPath),
     extensionMode: vscode.ExtensionMode.Test,
     globalState: { get: () => undefined, update: async () => undefined, keys: () => [], setKeysForSync: () => {} } as any,
     workspaceState: { get: () => undefined, update: async () => undefined, keys: () => [] } as any,
@@ -19,7 +20,7 @@ export function createMockContext(): vscode.ExtensionContext {
     logPath: null as any,
     extension: null as any,
     environmentVariableCollection: null as any,
-    asAbsolutePath: (p: string) => path.resolve(__dirname, '..', '..', p),
+    asAbsolutePath: (p: string) => path.resolve(extPath, p),
   } as unknown as vscode.ExtensionContext;
 }
 
