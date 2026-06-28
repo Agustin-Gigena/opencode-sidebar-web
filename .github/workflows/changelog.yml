@@ -27,162 +27,27 @@ jobs:
           tool: git-cliff
 
       - name: Detect latest version from CHANGELOG.md
-        run: |
-          python3 << 'PYEOF'
-import re, subprocess, os
-
-with open("CHANGELOG.md") as f:
-    content = f.read()
-
-match = re.search(
-    r"^##\s*\[Unreleased\].*?^##\s*\[(\d+\.\d+\.\d+)\]",
-    content,
-    re.MULTILINE | re.DOTALL,
-)
-
-if not match:
-    print("No version found in CHANGELOG.md, using git tags")
-    exit(0)
-
-version = match.group(1)
-tag = f"v{version}"
-print(f"Latest version from CHANGELOG.md: {tag}")
-
-result = subprocess.run(
-    ["git", "tag", "-l", tag], capture_output=True, text=True
-)
-tag_exists = bool(result.stdout.strip())
-
-if not tag_exists:
-    print(f"Tag {tag} not found, creating temporary tag")
-    result = subprocess.run(
-        ["git", "log", "--format=%H", "--diff-filter=M", "--", "CHANGELOG.md"],
-        capture_output=True, text=True,
-    )
-    commits = result.stdout.strip().split("\n")
-    if commits and commits[0]:
-        subprocess.run(["git", "tag", tag, commits[0]])
-        env_file = os.environ.get("GITHUB_ENV")
-        if env_file:
-            with open(env_file, "a") as f:
-                f.write(f"CREATED_TAG=true\nTAG_VERSION={tag}\n")
-        print(f"Temporary tag {tag} created at {commits[0]}")
-    else:
-        print("Could not find CHANGELOG.md commit, using HEAD")
-        subprocess.run(["git", "tag", tag, "HEAD"])
-        env_file = os.environ.get("GITHUB_ENV")
-        if env_file:
-            with open(env_file, "a") as f:
-                f.write(f"CREATED_TAG=true\nTAG_VERSION={tag}\n")
-else:
-    print(f"Tag {tag} already exists")
-PYEOF
+        run: python3 scripts/detect-version.py
 
       - name: Generate and merge English changelog
         run: |
-          git-cliff --unreleased --config cliff.toml --output _new_entries.md
-
-          if [ ! -s _new_entries.md ]; then
+          git-cliff --unreleased --config cliff.toml --output _new.md
+          if [ -s _new.md ]; then
+            python3 scripts/merge-changelog.py _new.md CHANGELOG.md
+            rm -f _new.md
+          else
             echo "No new English entries to add"
-            exit 0
           fi
-
-          python3 << 'PYEOF'
-import re
-
-with open("_new_entries.md") as f:
-    content = f.read().strip()
-
-lines = content.split("\n")
-if lines and lines[0].startswith("## ["):
-    lines = lines[1:]
-if lines and lines[0].strip() == "":
-    lines = lines[1:]
-new_entries = "\n".join(lines).strip()
-
-if not new_entries:
-    print("No new English entries to add")
-    exit(0)
-
-with open("CHANGELOG.md") as f:
-    content = f.read()
-
-parts = content.split("##", 1)
-header = parts[0]
-
-if len(parts) > 1:
-    rest = "##" + parts[1]
-    rest = re.sub(
-        r"^## \[Unreleased\].*?(?=^## |\Z)",
-        "",
-        rest,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-else:
-    rest = ""
-
-with open("CHANGELOG.md", "w") as f:
-    f.write(header)
-    f.write("## [Unreleased]\n\n")
-    f.write(new_entries + "\n\n")
-    f.write(rest)
-
-print("English changelog merged successfully")
-PYEOF
-          rm -f _new_entries.md
 
       - name: Generate and merge Spanish changelog
         run: |
-          git-cliff --unreleased --config cliff.es.toml --output _new_entries.es.md
-
-          if [ ! -s _new_entries.es.md ]; then
+          git-cliff --unreleased --config cliff.es.toml --output _new.es.md
+          if [ -s _new.es.md ]; then
+            python3 scripts/merge-changelog.py _new.es.md CHANGELOG.es.md
+            rm -f _new.es.md
+          else
             echo "No new Spanish entries to add"
-            exit 0
           fi
-
-          python3 << 'PYEOF'
-import re
-
-with open("_new_entries.es.md") as f:
-    content = f.read().strip()
-
-lines = content.split("\n")
-if lines and lines[0].startswith("## ["):
-    lines = lines[1:]
-if lines and lines[0].strip() == "":
-    lines = lines[1:]
-new_entries = "\n".join(lines).strip()
-
-if not new_entries:
-    print("No new Spanish entries to add")
-    exit(0)
-
-with open("CHANGELOG.es.md") as f:
-    content = f.read()
-
-parts = content.split("##", 1)
-header = parts[0]
-
-if len(parts) > 1:
-    rest = "##" + parts[1]
-    rest = re.sub(
-        r"^## \[Unreleased\].*?(?=^## |\Z)",
-        "",
-        rest,
-        flags=re.MULTILINE | re.DOTALL,
-    )
-else:
-    rest = ""
-
-with open("CHANGELOG.es.md", "w") as f:
-    f.write(header)
-    f.write("## [Unreleased]\n\n")
-    f.write(new_entries + "\n\n")
-    f.write(rest)
-
-print("Spanish changelog merged successfully")
-PYEOF
-          rm -f _new_entries.es.md
 
       - name: Cleanup temporary tag
         if: env.CREATED_TAG == 'true'
