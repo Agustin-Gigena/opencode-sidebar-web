@@ -1,0 +1,52 @@
+[changelog]
+header = ""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | trim }}
+    {% for commit in commits %}
+        - {% if commit.scope %}*({{ commit.scope }})* {% endif %}\
+            {% if commit.breaking %}[**breaking**] {% endif %}\
+            {{ commit.message | upper_first }}\
+    {% endfor %}
+{% endfor %}
+"""
+trim = true
+render_always = false
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+require_conventional = false
+split_commits = false
+commit_preprocessors = []
+protect_breaking_commits = false
+commit_parsers = [
+    { message = "^docs: update IMPLEMENTATION_PLAN\\.md", skip = true },
+    { message = "^feat", group = "Añadido" },
+    { message = "^fix", group = "Corregido" },
+    { message = "^doc", group = "Cambiado" },
+    { message = "^perf", group = "Cambiado" },
+    { message = "^refactor", group = "Cambiado" },
+    { message = "^style", group = "Cambiado" },
+    { message = "^test", group = "Cambiado" },
+    { message = "^chore\\(release\\): prepare for", skip = true },
+    { message = "^chore\\(deps.*\\)", skip = true },
+    { message = "^chore\\(pr\\)", skip = true },
+    { message = "^chore\\(pull\\)", skip = true },
+    { message = "^chore|^ci", group = "Cambiado" },
+    { message = "^revert", group = "Eliminado" },
+    { message = ".*", group = "Otro" },
+]
+filter_commits = false
+fail_on_unmatched_commit = false
+link_parsers = []
+use_branch_tags = false
+topo_order = false
+topo_order_commits = true
+sort_commits = "oldest"
+recurse_submodules = false
