@@ -26,7 +26,7 @@ split_commits = false
 commit_preprocessors = []
 protect_breaking_commits = false
 commit_parsers = [
-    { message = "^docs: update IMPLEMENTATION_PLAN\\.md", skip = true },
+    { message = "Phase \\d+", skip = true },
     { message = "^feat", group = "Añadido" },
     { message = "^fix", group = "Corregido" },
     { message = "^doc", group = "Cambiado" },
