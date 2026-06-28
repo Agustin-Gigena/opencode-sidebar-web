@@ -1,5 +1,6 @@
 agent = "opencode"
 agent-mode = "ralph"
+model = "google/gemini-3.1-flash-lite"
 
 max-iterations = 25
 
