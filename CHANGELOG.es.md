@@ -1,14 +1,14 @@
-# Change Log
+# Registro de Cambios
 
-[🇪🇸 Español](CHANGELOG.es.md)
+[🇬🇧 English](CHANGELOG.md)
 
-All notable changes to the "opencode-sidebar-web" extension will be documented in this file.
+Todos los cambios notables en la extensión "opencode-sidebar-web" se documentarán en este archivo.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+Consulta [Keep a Changelog](http://keepachangelog.com/) para recomendaciones sobre cómo estructurar este archivo.
 
 ## [Unreleased]
 
-### Added
+### Añadido
 
 - Phase 1 - implement OpenCodeAPI HTTP client
 - Phase 2 - implement CodeLens and 4 inline code action commands
@@ -26,7 +26,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Remove legacy devcontainer settings and installBinary command (Phase 10 Task 9)
 - Remove opencode-ai dependency, add adm-zip and modern-tar (Phase 10 Task 10)
 
-### Changed
+### Cambiado
 
 - Update IMPLEMENTATION_PLAN.md for Phase 2 completion
 - Update IMPLEMENTATION_PLAN.md for Phase 3 completion
@@ -46,7 +46,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Update IMPLEMENTATION_PLAN.md for Phase 10 Task 9 completion
 - Update IMPLEMENTATION_PLAN.md for Phase 10 Task 10 completion
 
-### Fixed
+### Corregido
 
 - Use bundled opencode binary and active workspace
 - Add content-type validation and remove broken context API calls (Phase 9.3-9.5)
@@ -54,21 +54,21 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [0.7.1] - 2026-05-24
 
-### Fixed
-- Fix extension activation before checking commands in test
-- Various bug fixes
+### Corregido
+- Corregida la activación de la extensión antes de verificar comandos en tests
+- Varias correcciones de errores
 
 ## [0.7.0] - 2026-05-24
 
-### Added
+### Añadido
 - Comando para instalar OpenCode desde VS Code
 
-### Fixed
-- Fix release workflow
+### Corregido
+- Corregido el workflow de release
 
 ## [0.6.0] - 2026-05-20
 
-### Added
+### Añadido
 - Tests automatizados para detección remota y servidor existente
 - CI/CD: ejecución de tests en workflows
 - CI/CD: instalación de opencode-ai antes de tests
@@ -76,7 +76,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [0.5.0] - 2026-05-18
 
-### Added
+### Añadido
 - CSP dinámico y URL de webview para soporte de devcontainer
 - Configuración de devcontainer para desarrollo
 - Auto-conexión a servidor existente en remoto
@@ -84,32 +84,32 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [0.4.0] - 2026-05-15
 
-### Added
+### Añadido
 - Detección automática de entorno remoto
 - Conexión a servidor existente en remoto
 - Instalación con streaming de logs vía `asExternalUri` proxy
 - Configuración `devcontainerMode`
 
-### Changed
+### Cambiado
 - Forzar remote extension host
 
 ## [0.3.0] - 2026-05-10
 
-### Changed
+### Cambiado
 - Migración de panel a webview view en secondary sidebar
 
 ## [0.2.0] - 2026-05-01
 
-### Added
+### Añadido
 - Sistema de deploy automatizado
 - Acción de GitHub para release
 
-### Changed
+### Cambiado
 - Actualización del sistema de deploy y optimización de peso
 
 ## [0.1.0] - 2026-04-01
 
-### Added
+### Añadido
 - Proyecto inicial con panel lateral
 - Sistema de autostart
 - Licencia MIT
